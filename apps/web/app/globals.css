@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Theme variables ── */
+:root, .theme-light {
+  --bg-primary:   #faf9f6;
+  --bg-secondary: #ffffff;
+  --bg-card:      #ffffff;
+  --bg-sidebar:   #faf9f6;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted:   #9ca3af;
+  --accent:       #e1434b;
+  --accent-hover: #c73038;
+  --border:       rgba(30,30,30,0.15);
+  --shadow:       0 1px 4px rgba(0,0,0,0.08);
+  --input-bg:     rgba(255,255,255,0.6);
+}
+
+.theme-dark {
+  --bg-primary:   #0f0f0f;
+  --bg-secondary: #1a1a1a;
+  --bg-card:      #1c1c1c;
+  --bg-sidebar:   #111111;
+  --text-primary: #f0f0f0;
+  --text-secondary: #aaaaaa;
+  --text-muted:   #666666;
+  --accent:       #ff5a63;
+  --accent-hover: #e1434b;
+  --border:       rgba(255,255,255,0.1);
+  --shadow:       0 1px 4px rgba(0,0,0,0.4);
+  --input-bg:     rgba(255,255,255,0.07);
+}
+
+.theme-sepia {
+  --bg-primary:   #f4f1ea;
+  --bg-secondary: #fdf9f0;
+  --bg-card:      #fdf9f0;
+  --bg-sidebar:   #ece8e0;
+  --text-primary: #3c3020;
+  --text-secondary: #7a6848;
+  --text-muted:   #a89878;
+  --accent:       #c8553d;
+  --accent-hover: #a83f2a;
+  --border:       rgba(100,80,40,0.2);
+  --shadow:       0 1px 4px rgba(80,60,20,0.1);
+  --input-bg:     rgba(255,255,240,0.7);
+}
+
+.theme-ocean {
+  --bg-primary:   #f0f4f8;
+  --bg-secondary: #ffffff;
+  --bg-card:      #ffffff;
+  --bg-sidebar:   #e8f0f8;
+  --text-primary: #1a2f4a;
+  --text-secondary: #4a6280;
+  --text-muted:   #7a9ab8;
+  --accent:       #2563eb;
+  --accent-hover: #1d4ed8;
+  --border:       rgba(37,99,235,0.15);
+  --shadow:       0 1px 4px rgba(37,99,235,0.1);
+  --input-bg:     rgba(255,255,255,0.8);
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* ── Page transitions ── */
+@keyframes fadeIn   { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeOut  { from { opacity: 1; } to { opacity: 0; } }
+
+.page-enter { animation: fadeIn 0.25s ease forwards; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Editor styles ── */
+.editor-body:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.editor-body:focus { outline: none; }
+.editor-body * { line-height: 1.8; }
+
+/* Fix hotlinked images in shared notes */
+.shared-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+  referrer-policy: no-referrer;
+}
+
+
