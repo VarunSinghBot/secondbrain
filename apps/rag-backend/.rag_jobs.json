@@ -1,0 +1,14 @@
+{
+  "95205627-9edc-4d34-941b-24bc9bfdcba8": {
+    "id": "95205627-9edc-4d34-941b-24bc9bfdcba8",
+    "status": "queued",
+    "payload": {
+      "contentId": "c1",
+      "userId": "u1",
+      "sourceType": "article",
+      "text": "hello world"
+    },
+    "createdAt": "2026-08-10T04:47:15.788Z",
+    "updatedAt": "2026-08-10T04:47:15.788Z"
+  }
+}

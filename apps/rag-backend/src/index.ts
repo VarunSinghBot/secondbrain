@@ -6,6 +6,7 @@ import type { RagAskRequest, RagAskResponse, RagIndexRequest } from "@secondbrai
 
 import { askWithRag, indexContent } from "./services/indexer"
 import { generateAnswer } from "./lib/gemini"
+import { addJob, getJob, startWorker } from "./worker/queue"
 
 dotenv.config()
 
@@ -80,3 +81,32 @@ app.post("/ask", async (req: Request<unknown, unknown, RagAskRequest>, res: Resp
 app.listen(port, () => {
   console.log(`SecondBrain RAG backend running on port ${port}`)
 })
+
+// Enqueue an async ingestion job (returns job id)
+app.post("/ingest-async", async (req: Request<unknown, unknown, RagIndexRequest>, res: Response) => {
+  const payload = req.body
+
+  if (!payload?.contentId || !payload.userId || !payload.sourceType) {
+    return res.status(400).json({ error: "contentId, userId and sourceType are required" })
+  }
+
+  try {
+    const jobId = await addJob(payload)
+    return res.status(202).json({ jobId, status: "queued" })
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : "Failed to enqueue job" })
+  }
+})
+
+app.get("/ingest-async/:jobId", async (req: Request, res: Response) => {
+  const rawJobId = req.params.jobId
+  const jobId = Array.isArray(rawJobId) ? rawJobId[0] : rawJobId
+  if (!jobId) return res.status(400).json({ error: "jobId is required" })
+
+  const job = await getJob(jobId)
+  if (!job) return res.status(404).json({ error: "job not found" })
+  return res.json(job)
+})
+
+// start background worker to process queued ingest jobs
+startWorker().catch((err) => console.error("Worker failed to start:", err))
