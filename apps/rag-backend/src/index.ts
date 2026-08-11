@@ -5,7 +5,6 @@ import express, { Request, Response } from "express"
 import type { RagAskRequest, RagAskResponse, RagIndexRequest } from "@secondbrain/types"
 
 import { askWithRag, indexContent } from "./services/indexer"
-import { generateAnswer } from "./lib/gemini"
 import { addJob, getJob, startWorker } from "./worker/queue"
 
 dotenv.config()
@@ -57,8 +56,7 @@ app.post("/ask", async (req: Request<unknown, unknown, RagAskRequest>, res: Resp
   }
 
   try {
-    const { prompt, sources } = await askWithRag(payload.userId, payload.query, payload.topK ?? 5)
-    const answer = await generateAnswer(prompt)
+    const { answer, sources } = await askWithRag(payload.userId, payload.query, payload.topK ?? 5)
 
     return res.json({
       answer,

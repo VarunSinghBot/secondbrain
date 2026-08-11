@@ -6,6 +6,9 @@ export interface QdrantPayload {
   sourceType: string
   sourceUrl?: string | null
   sourceName?: string | null
+  cloudinaryUrl?: string | null
+  modality?: string | null
+  tags?: string[] | null
   chunkIndex: number
   text: string
   metadata?: Record<string, unknown> | null
