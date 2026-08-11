@@ -1,7 +1,7 @@
 {
   "95205627-9edc-4d34-941b-24bc9bfdcba8": {
     "id": "95205627-9edc-4d34-941b-24bc9bfdcba8",
-    "status": "queued",
+    "status": "completed",
     "payload": {
       "contentId": "c1",
       "userId": "u1",
@@ -9,6 +9,65 @@
       "text": "hello world"
     },
     "createdAt": "2026-08-10T04:47:15.788Z",
-    "updatedAt": "2026-08-10T04:47:15.788Z"
+    "updatedAt": "2026-08-11T05:45:22.593Z",
+    "result": {
+      "chunks": [
+        {
+          "qdrantPointId": "d399fa93-d4cc-4f0c-8b75-48434b9e213d",
+          "chunkIndex": 0,
+          "text": "hello world",
+          "tokenCount": 3,
+          "cloudinaryUrl": null
+        }
+      ]
+    }
+  },
+  "da266bfc-0be2-434b-9d9c-cc1eb4b2c89a": {
+    "id": "da266bfc-0be2-434b-9d9c-cc1eb4b2c89a",
+    "status": "completed",
+    "payload": {
+      "userId": "project-user-6c9bc78b",
+      "contentId": "async-doc-432309ea",
+      "sourceType": "article",
+      "sourceName": "Async Processing Note",
+      "text": "Async ingestion processes jobs via local file system queue worker."
+    },
+    "createdAt": "2026-08-11T05:45:25.573Z",
+    "updatedAt": "2026-08-11T05:45:44.953Z",
+    "result": {
+      "chunks": [
+        {
+          "qdrantPointId": "620ab99a-3265-40d1-a0e7-45a7df1cc8c7",
+          "chunkIndex": 0,
+          "text": "Async ingestion processes jobs via local file system queue worker.",
+          "tokenCount": 17,
+          "cloudinaryUrl": null
+        }
+      ]
+    }
+  },
+  "af254cc8-76ed-457d-a81b-569cc778ed31": {
+    "id": "af254cc8-76ed-457d-a81b-569cc778ed31",
+    "status": "completed",
+    "payload": {
+      "userId": "project-user-2d2426b0",
+      "contentId": "async-doc-b310cf44",
+      "sourceType": "article",
+      "sourceName": "Async Processing Note",
+      "text": "Async ingestion processes jobs via local file system queue worker."
+    },
+    "createdAt": "2026-08-11T05:45:44.498Z",
+    "updatedAt": "2026-08-11T05:45:46.128Z",
+    "result": {
+      "chunks": [
+        {
+          "qdrantPointId": "a9696e3e-7dae-4181-81ba-e9f28887a6cc",
+          "chunkIndex": 0,
+          "text": "Async ingestion processes jobs via local file system queue worker.",
+          "tokenCount": 17,
+          "cloudinaryUrl": null
+        }
+      ]
+    }
   }
 }
