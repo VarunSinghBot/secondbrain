@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useSelector } from "react-redux"
 import type { RootState } from "@/store/store"
@@ -9,21 +9,23 @@ import toast, { Toaster } from "react-hot-toast"
 
 interface ContentProps { filterType: string | null; searchQuery: string }
 
-const TYPE_ICON:  Record<string, string> = { article: "📄", image: "🖼", audio: "🎵", video: "🎬" }
+const TYPE_ICON: Record<string, string> = { article: "📄", image: "🖼", audio: "🎵", video: "🎬" }
 const TYPE_COLOR: Record<string, string> = { article: "#6366f1", image: "#ec4899", audio: "#f59e0b", video: "#10b981" }
 
 interface Friend { id: string; name: string | null; email: string | null }
 
 export default function Content({ filterType, searchQuery }: ContentProps) {
-  const router  = useRouter()
-  const layout  = useSelector((s: RootState) => s.theme.layout)
-  const [items,    setItems]    = useState<ContentItem[]>([])
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState<string | null>(null)
-  const [delId,    setDelId]    = useState<string | null>(null)
-  const [shareId,  setShareId]  = useState<string | null>(null)
-  const [friends,  setFriends]  = useState<Friend[]>([])
+  const router = useRouter()
+  const layout = useSelector((s: RootState) => s.theme.layout)
+  const [items, setItems] = useState<ContentItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [delId, setDelId] = useState<string | null>(null)
+  const [shareId, setShareId] = useState<string | null>(null)
+  const [friends, setFriends] = useState<Friend[]>([])
   const [shareLink, setShareLink] = useState<string | null>(null)
+  const [semanticIds, setSemanticIds] = useState<string[]>([])
+  const semanticTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     (async () => {
@@ -37,9 +39,33 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
     })()
   }, [])
 
+  // Debounced semantic search — fires 400ms after user stops typing
+  useEffect(() => {
+    if (semanticTimer.current) clearTimeout(semanticTimer.current)
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setSemanticIds([])
+      return
+    }
+    semanticTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/rag/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchQuery.trim(), topK: 10 }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const ids = (data.results ?? []).map((r: { contentId: string }) => r.contentId)
+          setSemanticIds(ids)
+        }
+      } catch { /* silent */ }
+    }, 400)
+    return () => { if (semanticTimer.current) clearTimeout(semanticTimer.current) }
+  }, [searchQuery])
+
   useEffect(() => {
     if (shareId) {
-      fetch("/api/friends").then((r) => r.json()).then((d) => Array.isArray(d) && setFriends(d)).catch(() => {})
+      fetch("/api/friends").then((r) => r.json()).then((d) => Array.isArray(d) && setFriends(d)).catch(() => { })
     } else {
       setShareLink(null)
     }
@@ -47,17 +73,25 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
 
   const filtered = useMemo(() => {
     let result = items
-    if (filterType)  result = result.filter((i) => i.type === filterType)
+    if (filterType) result = result.filter((i) => i.type === filterType)
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      result  = result.filter((i) =>
+      // Keyword matches
+      const keywordMatches = result.filter((i) =>
         i.title.toLowerCase().includes(q) ||
-        i.body.toLowerCase().includes(q)  ||
+        i.body.toLowerCase().includes(q) ||
         i.tags?.some((t) => t.tagName.toLowerCase().includes(q))
       )
+      // Semantic matches (from vector search)
+      const semanticMatches = semanticIds.length > 0
+        ? result.filter((i) => semanticIds.includes(i.id) && !keywordMatches.some((km) => km.id === i.id))
+        : []
+      // Merge: keyword first, then semantic-only results
+      result = [...keywordMatches, ...semanticMatches]
     }
     return result
-  }, [items, filterType, searchQuery])
+  }, [items, filterType, searchQuery, semanticIds])
+
 
   const del = async (id: string) => {
     await fetch(`/api/content/${id}`, { method: "DELETE" })
@@ -66,7 +100,7 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
   }
 
   const sharePublic = async (noteId: string) => {
-    const res  = await fetch(`/api/content/${noteId}/share`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ duration: "1d" }) })
+    const res = await fetch(`/api/content/${noteId}/share`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ duration: "1d" }) })
     const data = await res.json()
     if (res.ok && data.shareLink) {
       setItems((prev) => prev.map((item) => item.id === noteId ? { ...item, shareEnabled: true, shareHash: data.shareHash, shareExpiresAt: data.shareExpiresAt } : item))
@@ -106,8 +140,8 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
       ) : (
         <div className={`grid ${gridCols} gap-4 mt-2`}>
           {filtered.map((item) => {
-            const color   = TYPE_COLOR[item.type] ?? "#e1434b"
-            const icon    = TYPE_ICON[item.type]  ?? "📝"
+            const color = TYPE_COLOR[item.type] ?? "#e1434b"
+            const icon = TYPE_ICON[item.type] ?? "📝"
             const dateStr = new Date(item.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
 
             return (
@@ -118,12 +152,13 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
                 <div className="h-1.5 w-full flex-shrink-0" style={{ background: color }} />
 
                 <div className="p-4 flex-1 flex flex-col">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span>{icon}</span>
                     <span className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full text-white" style={{ background: color }}>{item.type}</span>
+
                     {item.shareEnabled && (
                       <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-                        🔗 Shared
+                        Shared
                       </span>
                     )}
                   </div>
@@ -150,7 +185,7 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
 
                 {/* Footer */}
                 <div className="flex items-center justify-between px-4 py-2 border-t flex-shrink-0" style={{ borderColor: "var(--border)" }}
-                     onClick={(e) => e.stopPropagation()}>
+                  onClick={(e) => e.stopPropagation()}>
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>{dateStr}</span>
                   <div className="flex items-center gap-2">
                     <button onClick={(e) => { e.stopPropagation(); setShareId(shareId === item.id ? null : item.id) }}
@@ -163,10 +198,10 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
                 {/* Share modal */}
                 {shareId === item.id && (
                   <div className="absolute inset-0 rounded-xl flex flex-col justify-end z-10" style={{ background: "rgba(0,0,0,0.65)" }}
-                       onClick={(e) => e.stopPropagation()}>
+                    onClick={(e) => e.stopPropagation()}>
                     <div className="m-3 rounded-xl p-3" style={{ background: "var(--bg-card)" }}>
                       <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Share this note</p>
-                      
+
                       <button onClick={() => sharePublic(item.id)} className="w-full py-1.5 text-xs text-white rounded-lg mb-2 font-medium hover:opacity-90 transition-opacity" style={{ background: "#6366f1" }}>
                         🌍 {item.shareEnabled ? "Copy Public Link (1 Day Expiry)" : "Enable & Copy Public Link (1 Day)"}
                       </button>
@@ -197,7 +232,7 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
                 {/* Delete confirm */}
                 {delId === item.id && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl z-10"
-                       style={{ background: "rgba(0,0,0,0.75)" }} onClick={(e) => e.stopPropagation()}>
+                    style={{ background: "rgba(0,0,0,0.75)" }} onClick={(e) => e.stopPropagation()}>
                     <p className="text-white text-sm font-medium">Delete this note?</p>
                     <div className="flex gap-2">
                       <button className="px-4 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600" onClick={() => del(item.id)}>Yes, delete</button>

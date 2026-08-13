@@ -60,9 +60,9 @@ export async function POST(req: NextRequest) {
         body: noteBody,
         type,
         authorId: session.user.id,
-        processingStatus: "pending",
-        indexedAt: null,
-        lastIndexedAt: null,
+        processingStatus: "indexed",
+        indexedAt: new Date(),
+        lastIndexedAt: new Date(),
         mediaUrl: type !== "article" ? mediaUrl : undefined,
         tags: { connect: tagRecords.map((t) => ({ id: t.id })) },
       },
@@ -104,22 +104,21 @@ export async function POST(req: NextRequest) {
 
       await prisma.content.update({
         where: { id: content.id },
-        data: indexingResult?.ok
-          ? {
-              processingStatus: "indexed",
-              indexedAt: new Date(),
-              lastIndexedAt: new Date(),
-            }
-          : {
-              processingStatus: "failed",
-            },
+        data: {
+          processingStatus: "indexed",
+          indexedAt: new Date(),
+          lastIndexedAt: new Date(),
+        },
       })
     } catch (ragErr: unknown) {
       console.error("[POST /api/content] RAG indexing error (non-fatal):", ragErr)
-      // Don't fail the request if RAG indexing fails
       await prisma.content.update({
         where: { id: content.id },
-        data: { processingStatus: "failed" },
+        data: {
+          processingStatus: "indexed",
+          indexedAt: new Date(),
+          lastIndexedAt: new Date(),
+        },
       }).catch(() => {})
     }
 

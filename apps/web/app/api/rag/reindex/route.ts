@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const indexingResult = await queueRagIndexing({
       contentId: content.id,
       userId: session.user.id,
-      sourceType: content.type === "article" ? "article" : (content.type as "audio" | "video" | "image"),
+      sourceType: (content.type as any) ?? "article",
       sourceUrl: content.mediaUrl ?? null,
       sourceName: content.title,
       text: content.body,

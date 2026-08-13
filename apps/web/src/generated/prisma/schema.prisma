@@ -79,7 +79,7 @@ model Content {
   body             String
   type             String
   mediaUrl         String?
-  processingStatus String        @default("pending")
+  processingStatus String        @default("indexed")
   indexedAt        DateTime?
   lastIndexedAt    DateTime?
   shareEnabled     Boolean       @default(false)

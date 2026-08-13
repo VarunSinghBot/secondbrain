@@ -16,10 +16,10 @@ export async function uploadToCloudinary(
   const resourceType = mimeType.startsWith("video/")
     ? "video"
     : mimeType.startsWith("audio/")
-    ? "video" // Cloudinary handles audio files under resource_type "video"
-    : mimeType.startsWith("image/")
-    ? "image"
-    : "auto"
+      ? "video" // Cloudinary handles audio files under resource_type "video"
+      : mimeType.startsWith("image/")
+        ? "image"
+        : "auto"
 
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(

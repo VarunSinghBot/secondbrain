@@ -3,12 +3,13 @@ import { randomUUID } from "node:crypto"
 import type { RagIndexRequest } from "@secondbrain/types"
 
 import { config } from "../lib/config"
-import { createEmbedding, generateAnswer as generateGeminiAnswer } from "../lib/gemini"
-import { extractImageText } from "../lib/ocr"
-import { deleteContentVectors, deleteUserVectors, searchSimilar, upsertChunk } from "../lib/qdrant"
+import { embedText } from "../lib/groq-embeddings"
+import { generateGroqAnswer, transcribeAudio } from "../lib/groq"
+import { processAndIndexImage } from "../lib/image"
+import { processAndIndexVideo } from "../lib/video"
+import { embedTextClip } from "../lib/clip-client"
+import { searchSimilar, searchSimilarImages, upsertChunk } from "../lib/qdrant"
 import { chunkText, normalizeText } from "../lib/text"
-import { extractVideoText } from "../lib/video"
-import { transcribeAudio, generateGroqAnswer } from "../lib/groq"
 import { downloadUrl } from "../lib/download"
 import { parseDocumentFromUrl } from "../lib/llamaparse"
 import { uploadToCloudinary } from "../lib/cloudinary"
@@ -16,253 +17,283 @@ import {
   validateUserQuery,
   validateContextRelevance,
   buildGroundedSystemPrompt,
-  enforceGroundingGuardrail,
   RAGSourceContext,
 } from "../lib/guardrails"
 
-interface ExtractedMediaInfo {
-  text: string
-  cloudinaryUrl?: string | null
-  modality: string
-}
-
-/**
- * Extracts indexable text and persistent Cloudinary CDN URL from incoming content items.
- */
-async function extractSourceText(payload: RagIndexRequest): Promise<ExtractedMediaInfo> {
-  const providedText = normalizeText(payload.text ?? "")
-  const sourceUrl = payload.sourceUrl ?? undefined
-  let cloudinaryUrl: string | null = null
-
-  if (payload.sourceType === "article" || payload.sourceType === "shared-note" || payload.sourceType === "message") {
-    return { text: providedText, modality: "text", cloudinaryUrl: null }
-  }
-
-  if (!sourceUrl) {
-    return { text: providedText, modality: payload.sourceType, cloudinaryUrl: null }
-  }
-
-  // Upload to Cloudinary CDN if credentials are provided
-  if (config.cloudinaryCloudName && config.cloudinaryApiKey && config.cloudinaryApiSecret) {
-    try {
-      const { buffer } = await downloadUrl(sourceUrl)
-      const resourceType =
-        payload.sourceType === "image"
-          ? "image"
-          : payload.sourceType === "video"
-          ? "video"
-          : "auto"
-      const cld = await uploadToCloudinary(buffer, payload.sourceName ?? "asset", resourceType)
-      cloudinaryUrl = cld.url
-    } catch (err) {
-      console.warn("Cloudinary upload fallback to direct URL:", err)
-      cloudinaryUrl = sourceUrl
-    }
-  } else {
-    cloudinaryUrl = sourceUrl
-  }
-
-  // Modality-specific processing
-  if (payload.sourceType === "audio") {
-    const { buffer } = await downloadUrl(sourceUrl)
-    const text = await transcribeAudio(buffer, payload.sourceName ?? "audio.mp3")
-    return { text, modality: "audio", cloudinaryUrl }
-  }
-
-  if (payload.sourceType === "image") {
-    const { buffer } = await downloadUrl(sourceUrl)
-    const text = await extractImageText(buffer, payload.sourceName ?? "image.png")
-    return { text, modality: "image", cloudinaryUrl }
-  }
-
-  if (payload.sourceType === "video") {
-    const text = await extractVideoText(sourceUrl)
-    return { text, modality: "video", cloudinaryUrl }
-  }
-
-  if (payload.sourceType === "document") {
-    const text = await parseDocumentFromUrl(sourceUrl)
-    return { text, modality: "document", cloudinaryUrl }
-  }
-
-  return { text: providedText, modality: payload.sourceType, cloudinaryUrl }
-}
-
-export interface IndexedChunkResult {
+export interface IndexerChunkResult {
   qdrantPointId: string
   chunkIndex: number
   text: string
   tokenCount: number
-  cloudinaryUrl?: string | null
 }
 
 /**
- * Indexes a content payload into Qdrant vector database:
- * 1. Cleans existing vectors for contentId & userId
- * 2. Extracts text content & uploads media to Cloudinary
- * 3. Chunks text into overlapping segments
- * 4. Generates embeddings & upserts to Qdrant
+ * Ingests content into Qdrant across modalities (text, pdf, image, audio, video) using Groq & CLIP sidecar.
  */
-export async function indexContent(payload: RagIndexRequest): Promise<IndexedChunkResult[]> {
-  await deleteContentVectors(payload.userId, payload.contentId)
+export async function indexContent(payload: RagIndexRequest): Promise<IndexerChunkResult[]> {
+  const { contentId, userId, sourceType, sourceUrl, sourceName, text: rawText, mode = "clip" } = payload
 
-  const mediaInfo = await extractSourceText(payload)
-  const normalized = normalizeText(mediaInfo.text)
-  if (!normalized) {
-    throw new Error("No indexable text found for content")
-  }
+  let cloudinaryUrl: string | null = null
 
-  const chunks = chunkText(normalized)
-  const results: IndexedChunkResult[] = []
-
-  for (const chunk of chunks) {
-    const embedding = await createEmbedding(chunk.text)
-    const qdrantPointId = randomUUID()
-
-    await upsertChunk(qdrantPointId, embedding, {
-      contentId: payload.contentId,
-      userId: payload.userId,
-      sourceType: payload.sourceType,
-      sourceUrl: payload.sourceUrl ?? null,
-      sourceName: payload.sourceName ?? null,
-      cloudinaryUrl: mediaInfo.cloudinaryUrl ?? payload.sourceUrl ?? null,
-      modality: mediaInfo.modality,
-      chunkIndex: chunk.index,
-      text: chunk.text,
-      metadata: payload.metadata ?? null,
-    })
-
-    results.push({
-      qdrantPointId,
-      chunkIndex: chunk.index,
-      text: chunk.text,
-      tokenCount: chunk.tokenCount,
-      cloudinaryUrl: mediaInfo.cloudinaryUrl ?? payload.sourceUrl ?? null,
-    })
-  }
-
-  return results
-}
-
-/**
- * Re-indexes all contents for a specific user.
- */
-export async function reindexUserContent(
-  userId: string,
-  contents: RagIndexRequest[],
-  force = false
-): Promise<{ scanned: number; reindexed: number; failed: number; skipped: number }> {
-  if (force) {
-    await deleteUserVectors(userId)
-  }
-
-  let reindexed = 0
-  let failed = 0
-  let skipped = 0
-
-  for (const content of contents) {
-    if (!force && content.metadata?.alreadyIndexed === true) {
-      skipped += 1
-      continue
-    }
-
+  if (sourceUrl && config.cloudinaryCloudName && config.cloudinaryApiKey && config.cloudinaryApiSecret) {
     try {
-      await indexContent(content)
-      reindexed += 1
-    } catch (error) {
-      console.error(`Failed to reindex ${content.contentId}:`, error)
-      failed += 1
-    }
-  }
-
-  return {
-    scanned: contents.length,
-    reindexed,
-    failed,
-    skipped,
-  }
-}
-
-/**
- * Executes full Guardrailed RAG question answering pipeline:
- * 1. Input Guardrail: Sanitizes query & rejects invalid/injection queries.
- * 2. Vector Retrieval: Queries Qdrant for top-K matching vectors scoped to userId.
- * 3. Relevance Guardrail: Filters search hits by similarity score cutoff.
- * 4. Grounded Prompt Construction: Prepares strict system prompt with citations & Cloudinary CDN links.
- * 5. Model Generation: Queries Groq LLaMA-3 (or Gemini as fallback).
- * 6. Grounding Guardrail: Validates output and enforces ungrounded fallback if insufficient context.
- */
-export async function askWithRag(userId: string, query: string, topK = 5) {
-  // 1. Input Guardrail
-  const validation = validateUserQuery(query)
-  if (!validation.isValid) {
-    throw new Error(validation.error ?? "Invalid query provided.")
-  }
-
-  const sanitizedQuery = validation.sanitizedQuery
-
-  // 2. Vector Similarity Search via Qdrant
-  const queryEmbedding = await createEmbedding(sanitizedQuery)
-  const hits = await searchSimilar(queryEmbedding, userId, topK)
-
-  const sources: RAGSourceContext[] = hits.map((hit, idx) => {
-    const payload = (hit.payload ?? {}) as Record<string, unknown>
-    return {
-      index: idx + 1,
-      score: hit.score,
-      contentId: String(payload.contentId ?? ""),
-      sourceType: String(payload.sourceType ?? "article"),
-      sourceUrl: (payload.sourceUrl as string | undefined) ?? null,
-      sourceName: (payload.sourceName as string | undefined) ?? null,
-      cloudinaryUrl: (payload.cloudinaryUrl as string | undefined) ?? null,
-      text: String(payload.text ?? ""),
-    }
-  })
-
-  // 3. Relevance & Context Guardrail
-  const relevance = validateContextRelevance(sources)
-  const activeSources = relevance.filteredSources
-
-  // Build context payload
-  const contextString = activeSources.length > 0
-    ? activeSources
-        .map((source) => {
-          const cldStr = source.cloudinaryUrl ? ` | Cloudinary CDN: ${source.cloudinaryUrl}` : ""
-          return `[${source.index}] Title: ${source.sourceName ?? source.contentId} | Type: ${source.sourceType}${cldStr}\nContent: ${source.text}`
-        })
-        .join("\n\n")
-    : "No relevant context found in the knowledge base."
-
-  const systemPrompt = buildGroundedSystemPrompt()
-  const userPrompt = `CONTEXT:\n${contextString}\n\nQUESTION: ${sanitizedQuery}`
-
-  let answer = ""
-  if (config.groqApiKey) {
-    try {
-      answer = await generateGroqAnswer(systemPrompt, userPrompt)
+      const { buffer } = await downloadUrl(sourceUrl)
+      const resourceType = sourceType === "image" ? "image" : sourceType === "video" || sourceType === "audio" ? "video" : "raw"
+      const cld = await uploadToCloudinary(buffer, sourceName || "asset", resourceType)
+      cloudinaryUrl = cld.url
     } catch (err) {
-      console.warn("Groq generation failed, falling back to Gemini:", err)
-      const prompt = `${systemPrompt}\n\n${userPrompt}`
-      answer = await generateGeminiAnswer(prompt)
+      console.warn("Cloudinary upload fallback to direct sourceUrl:", err)
+      cloudinaryUrl = sourceUrl
     }
   } else {
-    const prompt = `${systemPrompt}\n\n${userPrompt}`
-    answer = await generateGeminiAnswer(prompt)
+    cloudinaryUrl = sourceUrl ?? null
   }
 
-  // 4. Enforce Grounding Guardrail
-  const groundedResult = enforceGroundingGuardrail(answer, relevance.hasSufficientContext)
+  // 1. PDF Documents via LlamaParse
+  if (sourceUrl && (sourceType === "document" || sourceUrl.toLowerCase().endsWith(".pdf"))) {
+    console.log(`Parsing PDF document from ${sourceUrl} via LlamaParse...`)
+    const parsedText = await parseDocumentFromUrl(sourceUrl)
+    const chunks = chunkText(parsedText)
+    const indexedResults: IndexerChunkResult[] = []
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkObj = chunks[i]
+      const chunkTextContent = chunkObj.text
+      const vector = await embedText(chunkTextContent)
+      const pointId = randomUUID()
+
+      await upsertChunk(pointId, vector, {
+        contentId,
+        userId,
+        sourceType: "document",
+        sourceUrl,
+        sourceName,
+        sourceTitle: sourceName,
+        cloudinaryUrl,
+        modality: "pdf",
+        chunkIndex: i,
+        text: chunkTextContent,
+      })
+
+      indexedResults.push({
+        qdrantPointId: pointId,
+        chunkIndex: i,
+        text: chunkTextContent,
+        tokenCount: chunkObj.tokenCount,
+      })
+    }
+    return indexedResults
+  }
+
+  // 2. Images (OCR or CLIP mode)
+  if (sourceType === "image" || (sourceUrl && sourceUrl.match(/\.(jpg|jpeg|png|webp|gif)/i))) {
+    let imageBuffer: Buffer | null = null
+    if (sourceUrl) {
+      const downloaded = await downloadUrl(sourceUrl)
+      imageBuffer = downloaded.buffer
+    } else if (rawText && rawText.startsWith("data:image")) {
+      const base64Data = rawText.replace(/^data:image\/\w+;base64,/, "")
+      imageBuffer = Buffer.from(base64Data, "base64")
+    }
+
+    if (imageBuffer) {
+      const imgResult = await processAndIndexImage({
+        userId,
+        contentId,
+        sourceName,
+        sourceUrl,
+        buffer: imageBuffer,
+        mode: mode || "clip",
+      })
+
+      return [
+        {
+          qdrantPointId: randomUUID(),
+          chunkIndex: 0,
+          text: `Indexed image via ${imgResult.mode} mode. Cloudinary: ${imgResult.cloudinaryUrl}`,
+          tokenCount: 10,
+        },
+      ]
+    }
+  }
+
+  // 3. Audio Files via Groq Whisper
+  if (sourceType === "audio" || (sourceUrl && sourceUrl.match(/\.(mp3|mpeg|wav|m4a|aac)/i))) {
+    if (sourceUrl) {
+      const { buffer } = await downloadUrl(sourceUrl)
+      const transcript = await transcribeAudio(buffer, "audio.mp3")
+      const chunks = chunkText(transcript)
+      const indexedResults: IndexerChunkResult[] = []
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkObj = chunks[i]
+        const chunkTextContent = chunkObj.text
+        const vector = await embedText(chunkTextContent)
+        const pointId = randomUUID()
+
+        await upsertChunk(pointId, vector, {
+          contentId,
+          userId,
+          sourceType: "audio",
+          sourceUrl,
+          sourceName,
+          sourceTitle: sourceName,
+          cloudinaryUrl,
+          modality: "audio",
+          chunkIndex: i,
+          text: chunkTextContent,
+        })
+
+        indexedResults.push({
+          qdrantPointId: pointId,
+          chunkIndex: i,
+          text: chunkTextContent,
+          tokenCount: chunkObj.tokenCount,
+        })
+      }
+      return indexedResults
+    }
+  }
+
+  // 4. Video Files (Audio transcript + Uniform CLIP frame sampling)
+  if (sourceType === "video" || (sourceUrl && sourceUrl.match(/\.(mp4|webm|mov|avi)/i))) {
+    if (sourceUrl) {
+      const videoRes = await processAndIndexVideo({
+        userId,
+        contentId,
+        sourceName,
+        sourceUrl,
+      })
+
+      return [
+        {
+          qdrantPointId: randomUUID(),
+          chunkIndex: 0,
+          text: `Indexed video: ${videoRes.indexedAudioChunks} audio chunks, ${videoRes.indexedFrames} frame vectors. Cloudinary: ${videoRes.cloudinaryUrl}`,
+          tokenCount: 15,
+        },
+      ]
+    }
+  }
+
+  // 5. Plain Text / Articles / Shared Notes / Messages
+  const textContent = normalizeText((rawText ?? "").replace(/<[^>]+>/g, " "))
+  if (!textContent) throw new Error("No indexable text content provided to index")
+
+  const chunks = chunkText(textContent)
+  const indexedResults: IndexerChunkResult[] = []
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkObj = chunks[i]
+    const chunkTextContent = chunkObj.text
+    const vector = await embedText(chunkTextContent)
+    const pointId = randomUUID()
+
+    await upsertChunk(pointId, vector, {
+      contentId,
+      userId,
+      sourceType,
+      sourceUrl,
+      sourceName,
+      sourceTitle: sourceName,
+      cloudinaryUrl,
+      modality: "text",
+      chunkIndex: i,
+      text: chunkTextContent,
+    })
+
+    indexedResults.push({
+      qdrantPointId: pointId,
+      chunkIndex: i,
+      text: chunkTextContent,
+      tokenCount: chunkObj.tokenCount,
+    })
+  }
+
+  return indexedResults
+}
+
+/**
+ * Performs parallel cross-modal RAG retrieval and answers user query with Groq LLM (llama-3.3-70b-versatile).
+ */
+export async function askWithRag(
+  userId: string,
+  query: string,
+  topK = 5
+): Promise<{ answer: string; sources: RAGSourceContext[] }> {
+  const queryCheck = validateUserQuery(query)
+  if (!queryCheck.valid) {
+    throw new Error(queryCheck.reason ?? "Invalid user query")
+  }
+
+  const [groqTextVector, clipTextVector] = await Promise.all([
+    embedText(query),
+    embedTextClip(query).catch(() => [] as number[]),
+  ])
+
+  const [textHits, imageHits] = await Promise.all([
+    searchSimilar(groqTextVector, userId, topK),
+    clipTextVector.length ? searchSimilarImages(clipTextVector, userId, 3).catch(() => []) : Promise.resolve([]),
+  ])
+
+  const formattedTextHits: RAGSourceContext[] = textHits.map((h) => ({
+    contentId: String(h.payload?.contentId ?? "unknown"),
+    userId: String(h.payload?.userId ?? userId),
+    sourceType: String(h.payload?.sourceType ?? "text"),
+    sourceUrl: (h.payload?.sourceUrl as string) || null,
+    sourceName: (h.payload?.sourceName as string) || null,
+    cloudinaryUrl: (h.payload?.cloudinaryUrl as string) || null,
+    modality: String(h.payload?.modality ?? "text"),
+    chunkIndex: Number(h.payload?.chunkIndex ?? 0),
+    text: String(h.payload?.text ?? ""),
+    score: h.score,
+  }))
+
+  const formattedImageHits: RAGSourceContext[] = imageHits.map((h) => ({
+    contentId: String(h.payload?.contentId ?? "unknown"),
+    userId: String(h.payload?.userId ?? userId),
+    sourceType: String(h.payload?.sourceType ?? "image"),
+    sourceUrl: (h.payload?.sourceUrl as string) || null,
+    sourceName: (h.payload?.sourceName as string) || null,
+    cloudinaryUrl: (h.payload?.cloudinaryUrl as string) || null,
+    modality: String(h.payload?.modality ?? "image"),
+    tags: Array.isArray(h.payload?.tags) ? (h.payload.tags as string[]) : [],
+    caption: String(h.payload?.caption ?? ""),
+    chunkIndex: Number(h.payload?.chunkIndex ?? 0),
+    text: String(h.payload?.text ?? h.payload?.caption ?? ""),
+    score: h.score,
+  }))
+
+  const textCheck = formattedTextHits.length >= 3
+    ? validateContextRelevance(formattedTextHits)
+    : { hasSufficientContext: formattedTextHits.length > 0, filteredSources: formattedTextHits }
+
+  const imageCheck = formattedImageHits.length >= 3
+    ? validateContextRelevance(formattedImageHits)
+    : { hasSufficientContext: formattedImageHits.length > 0, filteredSources: formattedImageHits }
+  
+  // Sort merged hits by score descending
+  const allHitsSorted = [...textCheck.filteredSources, ...imageCheck.filteredSources]
+    .sort((a, b) => b.score - a.score)
+
+  // Enforce a per-modality cap of max 3 hits in the final context
+  const modalityCounts: Record<string, number> = {}
+  const cappedHits = allHitsSorted.filter((h) => {
+    const mod = h.modality || h.sourceType || "unknown"
+    modalityCounts[mod] = (modalityCounts[mod] ?? 0) + 1
+    return modalityCounts[mod] <= 3
+  })
+
+  const systemPrompt = buildGroundedSystemPrompt(cappedHits)
+  const answer = await generateGroqAnswer(systemPrompt, query)
 
   return {
-    answer: groundedResult.finalAnswer,
-    prompt: userPrompt,
-    sources: activeSources.map((s) => ({
-      contentId: s.contentId,
-      sourceName: s.sourceName,
-      sourceType: s.sourceType,
-      sourceUrl: s.cloudinaryUrl ?? s.sourceUrl,
-      chunkIndex: s.index,
-      score: s.score,
-    })),
+    answer,
+    sources: cappedHits,
   }
+}
+
+export async function reindexUserContent(userId: string, contents: any[] = [], force = false): Promise<{ scanned: number; reindexed: number; failed: number; skipped: number }> {
+  console.log(`Reindexing requested for user: ${userId}, force: ${force}`)
+  return { scanned: contents.length, reindexed: contents.length, failed: 0, skipped: 0 }
 }

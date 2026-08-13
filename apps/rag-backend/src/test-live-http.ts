@@ -63,7 +63,7 @@ app.post("/ask", async (req: Request<unknown, unknown, RagAskRequest>, res: Resp
         title: source.sourceName,
         sourceType: source.sourceType as RagAskResponse["citations"][number]["sourceType"],
         sourceUrl: source.sourceUrl,
-        chunkIndex: source.chunkIndex,
+        chunkIndex: source.chunkIndex ?? 0,
         score: source.score,
       })),
     })

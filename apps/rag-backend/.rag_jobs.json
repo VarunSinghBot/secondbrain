@@ -69,5 +69,77 @@
         }
       ]
     }
+  },
+  "4a72448f-41f3-4da7-8ea3-bfcc855d39ff": {
+    "id": "4a72448f-41f3-4da7-8ea3-bfcc855d39ff",
+    "status": "completed",
+    "payload": {
+      "userId": "project-user-78095e50",
+      "contentId": "async-doc-50d2a972",
+      "sourceType": "article",
+      "sourceName": "Async Processing Note",
+      "text": "Async ingestion processes jobs via local file system queue worker."
+    },
+    "createdAt": "2026-08-12T05:22:18.245Z",
+    "updatedAt": "2026-08-12T05:22:51.557Z",
+    "result": {
+      "chunks": [
+        {
+          "qdrantPointId": "f412c744-284d-4680-9cf0-8e97685dcd5f",
+          "chunkIndex": 0,
+          "text": "Async ingestion processes jobs via local file system queue worker.",
+          "tokenCount": 17,
+          "cloudinaryUrl": null
+        }
+      ]
+    }
+  },
+  "c6d26116-036e-4310-b84f-e2a2799264cb": {
+    "id": "c6d26116-036e-4310-b84f-e2a2799264cb",
+    "status": "completed",
+    "payload": {
+      "userId": "project-user-c0cdffb3",
+      "contentId": "async-doc-e5fd08a3",
+      "sourceType": "article",
+      "sourceName": "Async Processing Note",
+      "text": "Async ingestion processes jobs via local file system queue worker."
+    },
+    "createdAt": "2026-08-12T05:24:02.235Z",
+    "updatedAt": "2026-08-12T07:24:31.168Z",
+    "result": {
+      "chunks": [
+        {
+          "qdrantPointId": "d45b7d30-1322-48c7-a917-a28620ac79b8",
+          "chunkIndex": 0,
+          "text": "Async ingestion processes jobs via local file system queue worker.",
+          "tokenCount": 17,
+          "cloudinaryUrl": null
+        }
+      ]
+    }
+  },
+  "3667f9ce-fdd0-4d2b-b9ca-e220169e086e": {
+    "id": "3667f9ce-fdd0-4d2b-b9ca-e220169e086e",
+    "status": "failed",
+    "payload": {
+      "contentId": "cmspobdnm000decta3ibjvaha",
+      "userId": "cmrfuq3to0000mwckb7ctqxc6",
+      "sourceType": "audio"
+    },
+    "createdAt": "2026-08-12T06:14:53.613Z",
+    "updatedAt": "2026-08-12T07:24:31.635Z",
+    "error": "No indexable text found for content"
+  },
+  "47a6bd7c-f4c2-4afe-8a17-4f1152cec09d": {
+    "id": "47a6bd7c-f4c2-4afe-8a17-4f1152cec09d",
+    "status": "failed",
+    "payload": {
+      "contentId": "cmspobdnm000decta3ibjvaha",
+      "userId": "cmrfuq3to0000mwckb7ctqxc6",
+      "sourceType": "audio"
+    },
+    "createdAt": "2026-08-12T06:15:15.466Z",
+    "updatedAt": "2026-08-12T07:24:32.153Z",
+    "error": "No indexable text found for content"
   }
 }

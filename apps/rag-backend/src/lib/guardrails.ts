@@ -1,61 +1,52 @@
 import { config } from "./config"
 
-/**
- * Represents a single retrieved source context entry passed to the LLM.
- */
 export interface RAGSourceContext {
-  index: number
+  index?: number
   contentId: string
+  userId?: string
   sourceType: string
   sourceName?: string | null
   sourceUrl?: string | null
   cloudinaryUrl?: string | null
+  modality?: string
+  chunkIndex?: number
+  tags?: string[]
+  caption?: string
   text: string
   score: number
 }
 
-/**
- * Result returned by the input query validation guardrail.
- */
 export interface GuardrailValidationResult {
+  valid: boolean
   isValid: boolean
   sanitizedQuery: string
+  reason?: string
   error?: string
 }
 
-/**
- * Result returned by the context relevance evaluation guardrail.
- */
 export interface GuardrailContextCheckResult {
   hasSufficientContext: boolean
   filteredSources: RAGSourceContext[]
   maxScore: number
 }
 
-/**
- * GUARDRAIL 1 — Input Validation & Sanitization
- * Validates incoming user queries for:
- * - Non-empty string constraint
- * - Length limits (max 2000 characters)
- * - Basic prompt injection & override pattern detection
- *
- * @param query Raw search query string from user input
- */
 export function validateUserQuery(query: string): GuardrailValidationResult {
   if (!query || typeof query !== "string") {
-    return { isValid: false, sanitizedQuery: "", error: "Query must be a non-empty string." }
+    const err = "Query must be a non-empty string."
+    return { valid: false, isValid: false, sanitizedQuery: "", reason: err, error: err }
   }
 
   const sanitized = query.trim()
   if (sanitized.length === 0) {
-    return { isValid: false, sanitizedQuery: "", error: "Query cannot be empty." }
+    const err = "Query cannot be empty."
+    return { valid: false, isValid: false, sanitizedQuery: "", reason: err, error: err }
   }
 
   if (sanitized.length > 2000) {
-    return { isValid: false, sanitizedQuery: "", error: "Query exceeds maximum allowed length of 2000 characters." }
+    const err = "Query exceeds maximum allowed length of 2000 characters."
+    return { valid: false, isValid: false, sanitizedQuery: "", reason: err, error: err }
   }
 
-  // Detect common prompt injection / jailbreak patterns
   const injectionPatterns = [
     /ignore previous instructions/i,
     /system prompt override/i,
@@ -65,21 +56,14 @@ export function validateUserQuery(query: string): GuardrailValidationResult {
 
   for (const pattern of injectionPatterns) {
     if (pattern.test(sanitized)) {
-      return { isValid: false, sanitizedQuery: sanitized, error: "Query contains restricted injection patterns." }
+      const err = "Query contains restricted injection patterns."
+      return { valid: false, isValid: false, sanitizedQuery: sanitized, reason: err, error: err }
     }
   }
 
-  return { isValid: true, sanitizedQuery: sanitized }
+  return { valid: true, isValid: true, sanitizedQuery: sanitized }
 }
 
-/**
- * GUARDRAIL 2 — Context Relevance & Similarity Cutoff
- * Filters vector search hits returned from Qdrant against a minimum similarity threshold.
- * Ensures the system does not inject low-confidence, irrelevant context into the prompt.
- *
- * @param sources List of retrieved source hits from vector search
- * @param minScore Minimum acceptable cosine similarity score cutoff
- */
 export function validateContextRelevance(
   sources: RAGSourceContext[],
   minScore = config.minRelevanceScore
@@ -94,15 +78,17 @@ export function validateContextRelevance(
   }
 }
 
-/**
- * GUARDRAIL 3 — Grounded System Prompt & Citation Formatting
- * Generates system instructions instructing the LLM to:
- * 1. Rely strictly on provided context snippets.
- * 2. Return an explicit "insufficient context" message when evidence is missing.
- * 3. Include numeric citations like [1], [2].
- * 4. Include Cloudinary CDN URLs when media items are referenced.
- */
-export function buildGroundedSystemPrompt(): string {
+export function buildGroundedSystemPrompt(sources: RAGSourceContext[] = []): string {
+  const contextParts: string[] = []
+
+  sources.forEach((s, idx) => {
+    const cld = s.cloudinaryUrl ? ` | url: ${s.cloudinaryUrl}` : ""
+    const mod = (s.modality || s.sourceType || "TEXT").toUpperCase()
+    contextParts.push(`[${idx + 1}] [${mod}] score=${roundScore(s.score)}${cld}\n${s.text || s.caption || "No text available"}`)
+  })
+
+  const contextStr = contextParts.length > 0 ? contextParts.join("\n\n") : "No relevant context found in the knowledge base."
+
   return [
     "You are a precise AI assistant with access to a personal multimodal knowledge base.",
     "The knowledge base contains text notes, documents, image descriptions, audio transcripts, and video content.",
@@ -110,17 +96,15 @@ export function buildGroundedSystemPrompt(): string {
     "If the context is insufficient or missing, state clearly: 'I could not find sufficient context in your knowledge base to answer this question accurately.' — do not hallucinate.",
     "Cite the source index like [1], [2] when you use a context snippet.",
     "If a Cloudinary URL is provided in the source metadata, mention it so the user can inspect the original media file.",
+    "",
+    `CONTEXT:\n${contextStr}`,
   ].join("\n")
 }
 
-/**
- * GUARDRAIL 4 — Grounding Verification & Response Bounding
- * Ensures that if search context is missing or low-confidence, the response explicitly
- * declines to generate speculative answers.
- *
- * @param answer Raw LLM generation output
- * @param hasSufficientContext Flag indicating whether relevance cutoff passed
- */
+function roundScore(score: number): number {
+  return Math.round(score * 10000) / 10000
+}
+
 export function enforceGroundingGuardrail(
   answer: string,
   hasSufficientContext: boolean

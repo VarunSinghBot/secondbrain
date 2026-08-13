@@ -9,7 +9,7 @@ import {
 } from "./lib/guardrails"
 import { config } from "./lib/config"
 import { generateGroqAnswer } from "./lib/groq"
-import { ensureCollection } from "./lib/qdrant"
+import { ensureCollections } from "./lib/qdrant"
 import { indexContent, askWithRag } from "./services/indexer"
 import { randomUUID } from "node:crypto"
 
@@ -124,7 +124,7 @@ async function runTestSuite() {
   // Functional Test 2.1: Qdrant Connection & Collection Setup
   start = performance.now()
   try {
-    await ensureCollection()
+    await ensureCollections()
     recordTest(
       "Functional",
       "Qdrant DB Connectivity & Collection Setup",

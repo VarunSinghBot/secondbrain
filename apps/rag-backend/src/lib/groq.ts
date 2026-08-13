@@ -14,7 +14,8 @@ export async function transcribeAudio(buffer: Buffer, fileName = "audio.mp3"): P
   })
 
   if (!response.ok) {
-    throw new Error(`Groq transcription failed: ${response.status} ${response.statusText}`)
+    const errText = await response.text().catch(() => "")
+    throw new Error(`Groq transcription failed (${response.status} ${response.statusText}): ${errText}`)
   }
 
   const data = (await response.json()) as { text?: string }
@@ -28,11 +29,18 @@ export interface GroqChatMessage {
 }
 
 export async function generateGroqAnswer(
-  systemPrompt: string,
-  userPrompt: string,
+  systemPromptOrPrompt: string,
+  userPrompt?: string,
   model = config.groqLlmModel
 ): Promise<string> {
   const apiKey = requireConfig(config.groqApiKey, "GROQ_API_KEY")
+
+  const messages: GroqChatMessage[] = userPrompt
+    ? [
+        { role: "system", content: systemPromptOrPrompt },
+        { role: "user", content: userPrompt },
+      ]
+    : [{ role: "user", content: systemPromptOrPrompt }]
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -42,17 +50,14 @@ export async function generateGroqAnswer(
     },
     body: JSON.stringify({
       model: model || "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
+      messages,
       temperature: 0.2,
       max_tokens: 1024,
     }),
   })
 
   if (!response.ok) {
-    const errText = await response.text()
+    const errText = await response.text().catch(() => "")
     throw new Error(`Groq chat completion failed (${response.status}): ${errText}`)
   }
 

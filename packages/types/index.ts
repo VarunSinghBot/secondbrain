@@ -30,8 +30,11 @@ export interface RagAskRequest {
 export interface RagCitation {
   contentId: string;
   title?: string | null;
+  sourceTitle?: string | null;
   sourceType: RagSourceType;
+  modality?: string | null;
   sourceUrl?: string | null;
+  cloudinaryUrl?: string | null;
   chunkIndex: number;
   score?: number;
 }
@@ -75,7 +78,31 @@ export interface RagIndexRequest {
   sourceName?: string | null;
   text?: string | null;
   parser?: string | null;
+  mode?: "ocr" | "clip" | null;
   metadata?: Record<string, unknown> | null;
+}
+
+export interface RagVerifyRequest {
+  question: string;
+  userId: string;
+  modalityFilter?: string | null;
+  topK?: number;
+}
+
+export interface RagVerifyHit {
+  modality: string;
+  score: number;
+  cloudinaryUrl?: string | null;
+  textPreview?: string | null;
+  tags?: string[] | null;
+}
+
+export interface RagVerifyResponse {
+  question: string;
+  label?: string;
+  retrievedHits: RagVerifyHit[];
+  answer: string;
+  verdict: string;
 }
 
 export interface Tag {
