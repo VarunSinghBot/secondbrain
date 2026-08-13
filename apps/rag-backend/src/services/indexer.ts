@@ -303,16 +303,30 @@ export async function askWithRag(
     ? validateContextRelevance(noteHits)
     : { hasSufficientContext: noteHits.length > 0, filteredSources: noteHits }
 
-  // Filter CLIP image hits below a minimum threshold too (avoids low-score images crowding non-image answers)
-  const MIN_CLIP_IMAGE_SCORE = 0.25
-  const filteredClipImages = formattedImageHits.filter((h) => h.score >= MIN_CLIP_IMAGE_SCORE)
-  const imageCheck = filteredClipImages.length >= 3
-    ? validateContextRelevance(filteredClipImages)
-    : { hasSufficientContext: filteredClipImages.length > 0, filteredSources: filteredClipImages }
+  // CLIP image hits come from the dedicated rag_images collection and are always included —
+  // no hard score floor here since image queries naturally score lower (0.20-0.30 is normal for CLIP)
+  const imageCheck = formattedImageHits.length >= 3
+    ? validateContextRelevance(formattedImageHits)
+    : { hasSufficientContext: formattedImageHits.length > 0, filteredSources: formattedImageHits }
+
+  // Symmetric relevance balancing:
+  // If the top CLIP image score beats the top text score, the query is image-focused.
+  // In that case, apply a stricter threshold to text hits to prevent low-relevance
+  // audio/text chunks from appearing in image answers.
+  const topTextScore = textCheck.filteredSources.length > 0
+    ? Math.max(...textCheck.filteredSources.map((h) => h.score))
+    : 0
+  const topImageScore = imageCheck.filteredSources.length > 0
+    ? Math.max(...imageCheck.filteredSources.map((h) => h.score))
+    : 0
+
+  const finalTextHits = topImageScore > topTextScore
+    ? textCheck.filteredSources.filter((h) => h.score >= 0.35)
+    : textCheck.filteredSources
 
   // Merge: real content first, then CLIP image hits — both sorted by score desc
   // This ensures notes/audio/video rank ahead of image tags at equal scores
-  const realContentSorted = textCheck.filteredSources.sort((a, b) => b.score - a.score)
+  const realContentSorted = finalTextHits.sort((a, b) => b.score - a.score)
   const clipImagesSorted = imageCheck.filteredSources.sort((a, b) => b.score - a.score)
 
   // Enforce a per-modality cap of max 3 hits in the final context
