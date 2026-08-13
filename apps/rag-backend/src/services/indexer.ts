@@ -337,6 +337,19 @@ export async function askWithRag(
     return modalityCounts[mod] <= 3
   })
 
+  // Minimum overall relevance gate:
+  // If every hit scores below 0.21, nothing is truly relevant to this query.
+  // Blocks cases like asking about "video" when no video is indexed (all hits score ~0.0–0.20).
+  // CLIP image scores naturally land at 0.22–0.25, so they still pass.
+  const MIN_OVERALL_SCORE = 0.21
+  const bestScore = cappedHits.length > 0 ? Math.max(...cappedHits.map((h) => h.score)) : 0
+  if (bestScore < MIN_OVERALL_SCORE) {
+    return {
+      answer: "I could not find sufficient context in your knowledge base to answer this question accurately.",
+      sources: [],
+    }
+  }
+
   const systemPrompt = buildGroundedSystemPrompt(cappedHits)
   const answer = await generateGroqAnswer(systemPrompt, query)
 
