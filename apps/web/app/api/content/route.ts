@@ -77,7 +77,8 @@ export async function POST(req: NextRequest) {
         sourceType: type === "article" ? "article" : type,
         sourceUrl: mediaUrl ?? null,
         sourceName: title,
-        text: noteBody,
+        // Prepend title so note is findable by name even if body text is sparse
+        text: title ? `${title}\n\n${noteBody ?? ""}` : noteBody,
         parser: "content-body",
         metadata: { tags, type },
       })

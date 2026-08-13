@@ -36,7 +36,10 @@ export async function POST(req: NextRequest) {
       sourceType: (content.type as any) ?? "article",
       sourceUrl: content.mediaUrl ?? null,
       sourceName: content.title,
-      text: content.body,
+      // Prepend title so notes are searchable by name even with sparse body text
+      text: content.title
+        ? `${content.title}\n\n${content.body ?? ""}`
+        : content.body,
       parser: "content-body",
       metadata: {
         tags: content.tags.map((tag) => tag.tagName),

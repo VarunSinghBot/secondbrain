@@ -165,6 +165,29 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
         sourceUrl,
       })
 
+      // Also index the note body/title as a text chunk for keyword searchability
+      const bodyText = normalizeText((rawText ?? "").replace(/<[^>]+>/g, " "))
+      if (bodyText) {
+        const bodyChunks = chunkText(bodyText)
+        for (let i = 0; i < bodyChunks.length; i++) {
+          const chunkTextContent = bodyChunks[i].text
+          const vector = await embedText(chunkTextContent)
+          const pointId = randomUUID()
+          await upsertChunk(pointId, vector, {
+            contentId,
+            userId,
+            sourceType: "video",
+            sourceUrl,
+            sourceName,
+            sourceTitle: sourceName,
+            cloudinaryUrl,
+            modality: "video_audio",
+            chunkIndex: i,
+            text: chunkTextContent,
+          })
+        }
+      }
+
       return [
         {
           qdrantPointId: randomUUID(),
@@ -174,6 +197,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
         },
       ]
     }
+    // No sourceUrl — fall through to index any body text below
   }
 
   // 5. Plain Text / Articles / Shared Notes / Messages
@@ -231,12 +255,15 @@ export async function askWithRag(
     embedTextClip(query).catch(() => [] as number[]),
   ])
 
+  // Fetch more text hits so notes aren't buried behind image tag chunks
+  const textTopK = Math.max(topK, 8)
+
   const [textHits, imageHits] = await Promise.all([
-    searchSimilar(groqTextVector, userId, topK),
+    searchSimilar(groqTextVector, userId, textTopK),
     clipTextVector.length ? searchSimilarImages(clipTextVector, userId, 3).catch(() => []) : Promise.resolve([]),
   ])
 
-  const formattedTextHits: RAGSourceContext[] = textHits.map((h) => ({
+  const allTextHits: RAGSourceContext[] = textHits.map((h) => ({
     contentId: String(h.payload?.contentId ?? "unknown"),
     userId: String(h.payload?.userId ?? userId),
     sourceType: String(h.payload?.sourceType ?? "text"),
@@ -248,6 +275,14 @@ export async function askWithRag(
     text: String(h.payload?.text ?? ""),
     score: h.score,
   }))
+
+  // Split: real content (notes, audio, video, pdf) vs image tag descriptions stored in rag_text
+  // Image tag chunks in rag_text have modality="image" — they need a stricter threshold
+  // so they don't crowd out actual notes when the query is about non-image content.
+  const IMAGE_TAG_SCORE_THRESHOLD = 0.35
+  const noteHits = allTextHits.filter((h) =>
+    h.modality !== "image" || h.score >= IMAGE_TAG_SCORE_THRESHOLD
+  )
 
   const formattedImageHits: RAGSourceContext[] = imageHits.map((h) => ({
     contentId: String(h.payload?.contentId ?? "unknown"),
@@ -264,21 +299,25 @@ export async function askWithRag(
     score: h.score,
   }))
 
-  const textCheck = formattedTextHits.length >= 3
-    ? validateContextRelevance(formattedTextHits)
-    : { hasSufficientContext: formattedTextHits.length > 0, filteredSources: formattedTextHits }
+  const textCheck = noteHits.length >= 3
+    ? validateContextRelevance(noteHits)
+    : { hasSufficientContext: noteHits.length > 0, filteredSources: noteHits }
 
-  const imageCheck = formattedImageHits.length >= 3
-    ? validateContextRelevance(formattedImageHits)
-    : { hasSufficientContext: formattedImageHits.length > 0, filteredSources: formattedImageHits }
-  
-  // Sort merged hits by score descending
-  const allHitsSorted = [...textCheck.filteredSources, ...imageCheck.filteredSources]
-    .sort((a, b) => b.score - a.score)
+  // Filter CLIP image hits below a minimum threshold too (avoids low-score images crowding non-image answers)
+  const MIN_CLIP_IMAGE_SCORE = 0.25
+  const filteredClipImages = formattedImageHits.filter((h) => h.score >= MIN_CLIP_IMAGE_SCORE)
+  const imageCheck = filteredClipImages.length >= 3
+    ? validateContextRelevance(filteredClipImages)
+    : { hasSufficientContext: filteredClipImages.length > 0, filteredSources: filteredClipImages }
+
+  // Merge: real content first, then CLIP image hits — both sorted by score desc
+  // This ensures notes/audio/video rank ahead of image tags at equal scores
+  const realContentSorted = textCheck.filteredSources.sort((a, b) => b.score - a.score)
+  const clipImagesSorted = imageCheck.filteredSources.sort((a, b) => b.score - a.score)
 
   // Enforce a per-modality cap of max 3 hits in the final context
   const modalityCounts: Record<string, number> = {}
-  const cappedHits = allHitsSorted.filter((h) => {
+  const cappedHits = [...realContentSorted, ...clipImagesSorted].filter((h) => {
     const mod = h.modality || h.sourceType || "unknown"
     modalityCounts[mod] = (modalityCounts[mod] ?? 0) + 1
     return modalityCounts[mod] <= 3
