@@ -1,6 +1,6 @@
 import { config, requireConfig } from "./config"
-import { embedImage, tagImage } from "./clip-client"
-import { embedText } from "./groq-embeddings"
+import { ClipSidecarUnavailableError, embedImage, tagImage } from "./clip-client"
+import { embedText } from "./embeddings"
 import { uploadToCloudinary } from "./cloudinary"
 import { upsertChunk, upsertImageVector } from "./qdrant"
 import { randomUUID } from "node:crypto"
@@ -65,7 +65,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
   if (mode === "ocr") {
     // Mode OCR: OCR text extraction -> Groq text embedding (768-dim) -> rag_text
     const extractedText = await extractOcrText(buffer, fileName)
-    const textVec = await embedText(extractedText)
+    const textVec = await embedText(extractedText, "RETRIEVAL_DOCUMENT")
     const pointId = randomUUID()
 
     await upsertChunk(pointId, textVec, {
@@ -82,13 +82,26 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
     })
   } else {
     // Mode CLIP: CLIP sidecar vector (512-dim) -> rag_images + Tag description vector (768-dim Groq) -> rag_text
-    const [clipVector, tags] = await Promise.all([
-      embedImage(buffer, mimeType),
-      tagImage(buffer, mimeType, 0.18, 8).catch(() => []),
-    ])
+    let clipVector: number[]
+    let tags: string[]
+    try {
+      ;[clipVector, tags] = await Promise.all([
+        embedImage(buffer, mimeType),
+        tagImage(buffer, mimeType, 0.18, 8).catch(() => []),
+      ])
+    } catch (err) {
+      // Re-thrown as the same typed error (not wrapped in a generic Error)
+      // so callers can distinguish "CLIP sidecar isn't running" — a 503,
+      // the service is just down — from other failures that stay a 500.
+      if (err instanceof ClipSidecarUnavailableError) {
+        console.warn(`processAndIndexImage: CLIP sidecar unavailable while indexing "${fileName}"`)
+      }
+      throw err
+    }
 
     const caption = tags.length ? `Image containing: ${tags.join(", ")}` : "Uploaded image"
-    const tagText = `Image: ${fileName}. Tags: ${tags.join(", ") || "none"}.${cloudinaryUrl ? ` Cloudinary: ${cloudinaryUrl}` : ""}`
+    const titlePart = sourceName ? `Title: ${sourceName}. ` : ""
+    const tagText = `${titlePart}Image: ${fileName}. Tags: ${tags.join(", ") || "none"}.${cloudinaryUrl ? ` Cloudinary: ${cloudinaryUrl}` : ""}`
 
     // Upsert 512-dim CLIP vector to rag_images
     const imgPointId = randomUUID()
@@ -108,7 +121,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
     })
 
     // Upsert 768-dim Groq text description vector to rag_text
-    const textVec = await embedText(tagText)
+    const textVec = await embedText(tagText, "RETRIEVAL_DOCUMENT")
     const txtPointId = randomUUID()
     await upsertChunk(txtPointId, textVec, {
       contentId: `${contentId}-tagdesc`,
