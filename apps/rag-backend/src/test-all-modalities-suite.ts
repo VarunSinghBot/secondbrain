@@ -14,10 +14,10 @@ interface TestStepResult {
 const testResults: TestStepResult[] = []
 
 async function runAllModalitiesTestSuite() {
-  console.log("\n==================================================================")
+  
   console.log("   COMPREHENSIVE RAG MULTIMODAL & TAG SUGGESTION TEST SUITE")
   console.log("   User: dummy@gmail.com")
-  console.log("==================================================================\n")
+  
 
   const userId = `dummy-user-${randomUUID().slice(0, 8)}`
 
@@ -152,7 +152,7 @@ async function runAllModalitiesTestSuite() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "openai/gpt-oss-120b",
           messages: [
             {
               role: "system",
@@ -161,7 +161,7 @@ async function runAllModalitiesTestSuite() {
             { role: "user", content: `Image Title: ${imagePayload.title}\nBody: ${imagePayload.body}` },
           ],
           temperature: 0.2,
-          max_tokens: 40,
+          max_tokens: 200,
         }),
       })
 
@@ -203,9 +203,9 @@ async function runAllModalitiesTestSuite() {
   }
 
   // REPORT SUMMARY
-  console.log("==================================================================")
+
   console.log("           MULTIMODAL RAG & TAG SUGGESTION TEST REPORT")
-  console.log("==================================================================")
+  
   for (const r of testResults) {
     console.log(`[${r.status}] [${r.modality}] - ${r.testName}: ${r.details}`)
   }
