@@ -69,9 +69,11 @@ export async function POST(req: NextRequest) {
       include: { tags: true },
     })
 
-    // RAG indexing — non-blocking, failures are logged not thrown
+    // RAG indexing — non-blocking, failures are logged not thrown.
+    // rag-backend's indexContent() records its own RagDocument rows once
+    // indexing succeeds — this route doesn't duplicate that write.
     try {
-      const indexingResult = await queueRagIndexing({
+      await queueRagIndexing({
         contentId: content.id,
         userId: session.user.id,
         sourceType: type === "article" ? "article" : type,
@@ -82,26 +84,6 @@ export async function POST(req: NextRequest) {
         parser: "content-body",
         metadata: { tags, type },
       })
-
-      if (indexingResult?.ok && indexingResult.data?.chunks?.length) {
-        await prisma.ragDocument.createMany({
-          data: indexingResult.data.chunks.map((chunk) => ({
-            contentId: content.id,
-            userId: session.user.id,
-            sourceType: type,
-            sourceUrl: mediaUrl ?? null,
-            sourceName: title,
-            extractedText: chunk.text,
-            chunkIndex: chunk.chunkIndex,
-            chunkTokenCount: chunk.tokenCount ?? null,
-            qdrantPointId: chunk.qdrantPointId,
-            embeddingModel: process.env.GEMINI_EMBEDDING_MODEL ?? "text-embedding-004",
-            parser: "content-body",
-            metadata: { tags, type },
-            status: "indexed",
-          })),
-        })
-      }
 
       await prisma.content.update({
         where: { id: content.id },

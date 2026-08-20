@@ -1,0 +1,61 @@
+// This mirrors RagDocument (and minimal slices of User/Content) from
+// apps/web/prisma/schema.prisma — rag-backend reads/writes RagDocument
+// directly (same Postgres DB, same DATABASE_URL) but has no need for web's
+// full social-graph. User/Content are trimmed to just enough scalar fields
+// to create/tear down fixtures in tests — production code only ever touches
+// RagDocument (web always creates the real Content row before calling
+// rag-backend, so a full model isn't needed there).
+//
+// apps/web owns migrations for these tables (via `prisma db push` there).
+// Never run `prisma db push` or `prisma migrate` from this app — only
+// `prisma generate`, to produce a query client. If these models' shapes
+// change in apps/web/prisma/schema.prisma, mirror the change here too;
+// the two schemas are not automatically kept in sync.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Content {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  type      String
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RagDocument {
+  id              String   @id @default(cuid())
+  contentId       String
+  userId          String
+  sourceType      String
+  sourceUrl       String?
+  sourceName      String?
+  extractedText   String   @db.Text
+  chunkIndex      Int
+  chunkTokenCount Int?
+  qdrantPointId   String   @unique
+  embeddingModel  String
+  parser          String?
+  metadata        Json?
+  status          String   @default("pending")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, contentId])
+  @@index([userId, status])
+  @@index([contentId, chunkIndex])
+}

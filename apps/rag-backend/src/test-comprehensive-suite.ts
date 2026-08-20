@@ -3,7 +3,8 @@ dotenv.config()
 
 import { indexContent, askWithRag, reindexUserContent } from "./services/indexer"
 import { deleteContentVectors, deleteUserVectors, searchSimilar } from "./lib/qdrant"
-import { createEmbedding } from "./lib/gemini"
+import { embedText } from "./lib/embeddings"
+import { prisma } from "./lib/prisma"
 import { validateUserQuery, validateContextRelevance, enforceGroundingGuardrail } from "./lib/guardrails"
 import { chunkText, normalizeText } from "./lib/text"
 import { randomUUID } from "node:crypto"
@@ -140,7 +141,7 @@ async function testEmbeddings() {
   console.log("\n🧮 CATEGORY 4: Embedding Generation")
 
   // 4a. Embedding produces 768-dim vector
-  const vec = await createEmbedding("Test embedding generation")
+  const vec = await embedText("Test embedding generation", "RETRIEVAL_DOCUMENT")
   record("Embeddings", "Embedding produces 768-dimensional vector", vec.length === 768, `Dimensions: ${vec.length}`)
 
   // 4b. Embedding values are numbers
@@ -152,7 +153,7 @@ async function testEmbeddings() {
   record("Embeddings", "Embedding vector is L2-normalized (~1.0)", Math.abs(norm - 1.0) < 0.1, `L2 norm: ${norm.toFixed(4)}`)
 
   // 4d. Different texts produce different embeddings
-  const vec2 = await createEmbedding("Completely different topic about cooking pasta")
+  const vec2 = await embedText("Completely different topic about cooking pasta", "RETRIEVAL_DOCUMENT")
   const same = vec.every((v, i) => v === vec2[i])
   record("Embeddings", "Different texts produce different embeddings", !same, `Identical: ${same}`)
 }
@@ -238,7 +239,7 @@ async function testVideoIndexingAndRetrieval() {
 // CATEGORY 8: IMAGE INDEXING & RETRIEVAL (Integration)
 // ───────────────────────────────────────────────────────────────
 async function testImageIndexingAndRetrieval() {
-  console.log("\n🖼️  CATEGORY 8: Image Indexing & Retrieval")
+  console.log("\n  CATEGORY 8: Image Indexing & Retrieval")
 
   const contentId = `image-${randomUUID().slice(0, 8)}`
   const chunks = await indexContent({
@@ -272,13 +273,13 @@ async function testImageTagSuggestions() {
     method: "POST",
     headers: { Authorization: `Bearer ${groqKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       messages: [
         { role: "system", content: "You are an AI image tagger. Generate 3 to 5 single-word lowercase tags separated by commas." },
         { role: "user", content: "Image Title: Golden Retriever in Park\nBody: Dog playing outside with a ball" },
       ],
       temperature: 0.2,
-      max_tokens: 40,
+      max_tokens: 200,
     }),
   })
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
@@ -336,7 +337,7 @@ async function testAccessControl() {
 // CATEGORY 11: QDRANT DELETE CLEANUP (Integration)
 // ───────────────────────────────────────────────────────────────
 async function testQdrantDeleteCleanup() {
-  console.log("\n🗑️  CATEGORY 11: Qdrant Delete Cleanup")
+  console.log("\n  CATEGORY 11: Qdrant Delete Cleanup")
 
   const userId = `del-test-${randomUUID().slice(0, 8)}`
   const contentId = `deletable-${randomUUID().slice(0, 8)}`
@@ -351,7 +352,7 @@ async function testQdrantDeleteCleanup() {
   })
 
   // Verify it's searchable
-  const beforeEmbed = await createEmbedding("ZXQ7WVKM unique keyword")
+  const beforeEmbed = await embedText("ZXQ7WVKM unique keyword", "RETRIEVAL_QUERY")
   const beforeHits = await searchSimilar(beforeEmbed, userId, 5)
   record("Delete Cleanup", "Content is searchable before deletion", beforeHits.length > 0, `Hits before: ${beforeHits.length}`)
 
@@ -372,37 +373,79 @@ async function testQdrantDeleteCleanup() {
 // CATEGORY 12: REINDEX FUNCTIONALITY (Integration)
 // ───────────────────────────────────────────────────────────────
 async function testReindex() {
-  console.log("\n🔄 CATEGORY 12: Reindex Functionality")
+  console.log("\n CATEGORY 12: Reindex Functionality")
 
-  const userId = `reindex-${randomUUID().slice(0, 8)}`
+  const uniqueMarker = `QRJ9XMFK${randomUUID().slice(0, 6)}`
+
+  // RagDocument.contentId/userId are real foreign keys against Content/User —
+  // fixtures must be real rows, not synthetic IDs, or writes fail with a
+  // foreign key violation instead of exercising the reindex logic.
+  const user = await prisma.user.create({ data: { email: `reindex-${randomUUID().slice(0, 8)}@test.local` } })
+  const userId = user.id
+  const content1 = await prisma.content.create({ data: { title: "Note 1", body: "placeholder", type: "article", authorId: userId } })
+  const content2 = await prisma.content.create({ data: { title: "Note 2", body: "placeholder", type: "article", authorId: userId } })
 
   const contents = [
     {
-      userId,
-      contentId: `ri-1-${randomUUID().slice(0, 8)}`,
+      contentId: content1.id,
       sourceType: "article" as const,
       sourceName: "Note 1",
-      text: "First note about data structures and algorithms",
+      text: `First note about data structures and algorithms, marker ${uniqueMarker}`,
     },
     {
-      userId,
-      contentId: `ri-2-${randomUUID().slice(0, 8)}`,
+      contentId: content2.id,
       sourceType: "article" as const,
       sourceName: "Note 2",
       text: "Second note about web development with React and TypeScript",
     },
   ]
 
-  // Non-force reindex
-  const result = await reindexUserContent(userId, contents, false)
-  record("Reindex", "Non-force reindex processes all unindexed", result.reindexed === 2, `Reindexed: ${result.reindexed}, Skipped: ${result.skipped}`)
+  // First pass: nothing tracked yet for these contentIds, so everything
+  // should actually get indexed — not just report as indexed.
+  const firstPass = await reindexUserContent(userId, contents, false)
+  record(
+    "Reindex",
+    "First reindex actually indexes untracked content",
+    firstPass.reindexed === 2 && firstPass.skipped === 0,
+    `Reindexed: ${firstPass.reindexed}, Skipped: ${firstPass.skipped}`
+  )
 
-  // Force reindex
+  // Prove it's real, not a trusted return value: search Qdrant directly for
+  // a marker word that only exists in the text we just reindexed.
+  const markerVec = await embedText(uniqueMarker, "RETRIEVAL_QUERY")
+  const markerHits = await searchSimilar(markerVec, userId, 5)
+  const foundInQdrant = markerHits.some((h) => String(h.payload?.text ?? "").includes(uniqueMarker))
+  record(
+    "Reindex",
+    "Reindexed content is actually retrievable from Qdrant",
+    foundInQdrant,
+    `Hits: ${markerHits.length}, marker found: ${foundInQdrant}`
+  )
+
+  // Second pass, non-force: already tracked under the current embeddingModel,
+  // so this should skip rather than redundantly re-embed.
+  const secondPass = await reindexUserContent(userId, contents, false)
+  record(
+    "Reindex",
+    "Non-force reindex skips content already current",
+    secondPass.reindexed === 0 && secondPass.skipped === 2,
+    `Reindexed: ${secondPass.reindexed}, Skipped: ${secondPass.skipped}`
+  )
+
+  // Force reindex re-processes regardless of tracked state
   const forceResult = await reindexUserContent(userId, contents, true)
-  record("Reindex", "Force reindex re-processes all content", forceResult.reindexed === 2, `Reindexed: ${forceResult.reindexed}, Skipped: ${forceResult.skipped}`)
+  record(
+    "Reindex",
+    "Force reindex re-processes all content",
+    forceResult.reindexed === 2 && forceResult.skipped === 0,
+    `Reindexed: ${forceResult.reindexed}, Skipped: ${forceResult.skipped}`
+  )
 
-  // Clean up
+  // Clean up — deleting the Content rows cascades to their RagDocument rows
   await deleteUserVectors(userId)
+  await prisma.content.delete({ where: { id: content1.id } })
+  await prisma.content.delete({ where: { id: content2.id } })
+  await prisma.user.delete({ where: { id: userId } })
 }
 
 // ───────────────────────────────────────────────────────────────

@@ -55,11 +55,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const updated = await prisma.content.update({ where: { id }, data, include: { tags: true } })
 
-    await prisma.ragDocument.deleteMany({ where: { contentId: updated.id } })
-
-    // RAG indexing — non-blocking
+    // RAG indexing — non-blocking. rag-backend's indexContent() clears the
+    // old RagDocument rows for this contentId and records fresh ones itself;
+    // this route doesn't duplicate that write.
     try {
-      const indexingResult = await queueRagIndexing({
+      await queueRagIndexing({
         contentId: updated.id,
         userId: session.user.id,
         sourceType: (updated.type as any) ?? "article",
@@ -69,26 +69,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         parser: "content-body",
         metadata: { tags: updated.tags.map((tag) => tag.tagName), type: updated.type },
       })
-
-      if (indexingResult?.ok && indexingResult.data?.chunks?.length) {
-        await prisma.ragDocument.createMany({
-          data: indexingResult.data.chunks.map((chunk) => ({
-            contentId: updated.id,
-            userId: session.user.id,
-            sourceType: updated.type,
-            sourceUrl: updated.mediaUrl ?? null,
-            sourceName: updated.title,
-            extractedText: chunk.text,
-            chunkIndex: chunk.chunkIndex,
-            chunkTokenCount: chunk.tokenCount ?? null,
-            qdrantPointId: chunk.qdrantPointId,
-            embeddingModel: process.env.GEMINI_EMBEDDING_MODEL ?? "text-embedding-004",
-            parser: "content-body",
-            metadata: { tags: updated.tags.map((tag) => tag.tagName), type: updated.type },
-            status: "indexed",
-          })),
-        })
-      }
 
       await prisma.content.update({
         where: { id: updated.id },

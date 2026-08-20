@@ -56,6 +56,33 @@ export interface RagReindexResponse {
   skipped: number;
 }
 
+// One content item as known by the caller (apps/web), passed to rag-backend's
+// POST /reindex so it can decide — per item, using its own RagDocument
+// tracking — whether a re-embed is actually needed.
+export interface RagReindexContentItem {
+  contentId: string;
+  sourceType: RagSourceType;
+  sourceUrl?: string | null;
+  sourceName?: string | null;
+  text?: string | null;
+}
+
+export interface RagReindexBatchRequest {
+  userId: string;
+  contents: RagReindexContentItem[];
+  force?: boolean;
+}
+
+export type RagReindexItemStatus = "reindexed" | "skipped" | "failed";
+
+export interface RagReindexBatchResponse {
+  scanned: number;
+  reindexed: number;
+  failed: number;
+  skipped: number;
+  results: Array<{ contentId: string; status: RagReindexItemStatus; error?: string }>;
+}
+
 export interface RagIndexResponse {
   message: string;
   contentId: string;

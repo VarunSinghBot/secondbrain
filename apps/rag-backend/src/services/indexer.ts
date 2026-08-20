@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto"
 
-import type { RagIndexRequest } from "@secondbrain/types"
+import type { RagIndexRequest, RagReindexContentItem } from "@secondbrain/types"
 
 import { config } from "../lib/config"
-import { embedText } from "../lib/groq-embeddings"
+import { embedText } from "../lib/embeddings"
 import { generateGroqAnswer, transcribeAudio } from "../lib/groq"
 import { processAndIndexImage } from "../lib/image"
 import { processAndIndexVideo } from "../lib/video"
@@ -13,6 +13,7 @@ import { chunkText, normalizeText } from "../lib/text"
 import { downloadUrl } from "../lib/download"
 import { parseDocumentFromUrl } from "../lib/llamaparse"
 import { uploadToCloudinary } from "../lib/cloudinary"
+import { prisma } from "../lib/prisma"
 import {
   validateUserQuery,
   validateContextRelevance,
@@ -25,6 +26,52 @@ export interface IndexerChunkResult {
   chunkIndex: number
   text: string
   tokenCount: number
+}
+
+/**
+ * Records what was just indexed in Postgres (RagDocument) so reindexUserContent()
+ * can later tell which content was indexed under a stale embeddingModel. This is
+ * the single place RagDocument rows are written — callers (apps/web) should not
+ * write their own copies, or the two can drift out of sync.
+ *
+ * Best-effort: the real work (Qdrant vectors) is already done by the time this
+ * runs, so a tracking-write failure (e.g. Postgres hiccup, or a contentId with
+ * no matching Content row — RagDocument has a real FK to it) must not discard
+ * a successful indexing result. Worst case, the next reindex pass treats this
+ * content as untracked and re-embeds it — safe, just slightly wasteful.
+ */
+async function recordIndexing(
+  payload: RagIndexRequest,
+  results: IndexerChunkResult[]
+): Promise<IndexerChunkResult[]> {
+  const { contentId, userId, sourceType, sourceUrl, sourceName, parser } = payload
+
+  try {
+    await prisma.ragDocument.deleteMany({ where: { contentId } })
+
+    if (results.length > 0) {
+      await prisma.ragDocument.createMany({
+        data: results.map((r) => ({
+          contentId,
+          userId,
+          sourceType,
+          sourceUrl: sourceUrl ?? null,
+          sourceName: sourceName ?? null,
+          extractedText: r.text,
+          chunkIndex: r.chunkIndex,
+          chunkTokenCount: r.tokenCount ?? null,
+          qdrantPointId: r.qdrantPointId,
+          embeddingModel: config.embeddingModel,
+          parser: parser ?? null,
+          status: "indexed",
+        })),
+      })
+    }
+  } catch (err) {
+    console.warn(`recordIndexing: failed to record RagDocument tracking for contentId=${contentId} (Qdrant vectors were still written):`, err)
+  }
+
+  return results
 }
 
 /**
@@ -59,7 +106,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
     for (let i = 0; i < chunks.length; i++) {
       const chunkObj = chunks[i]
       const chunkTextContent = chunkObj.text
-      const vector = await embedText(chunkTextContent)
+      const vector = await embedText(chunkTextContent, "RETRIEVAL_DOCUMENT")
       const pointId = randomUUID()
 
       await upsertChunk(pointId, vector, {
@@ -82,7 +129,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
         tokenCount: chunkObj.tokenCount,
       })
     }
-    return indexedResults
+    return recordIndexing(payload, indexedResults)
   }
 
   // 2. Images (OCR or CLIP mode)
@@ -106,14 +153,14 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
         mode: mode || "clip",
       })
 
-      return [
+      return recordIndexing(payload, [
         {
           qdrantPointId: randomUUID(),
           chunkIndex: 0,
           text: `Indexed image via ${imgResult.mode} mode. Cloudinary: ${imgResult.cloudinaryUrl}`,
           tokenCount: 10,
         },
-      ]
+      ])
     }
   }
 
@@ -128,7 +175,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
       for (let i = 0; i < chunks.length; i++) {
         const chunkObj = chunks[i]
         const chunkTextContent = chunkObj.text
-        const vector = await embedText(chunkTextContent)
+        const vector = await embedText(chunkTextContent, "RETRIEVAL_DOCUMENT")
         const pointId = randomUUID()
 
         await upsertChunk(pointId, vector, {
@@ -151,7 +198,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
           tokenCount: chunkObj.tokenCount,
         })
       }
-      return indexedResults
+      return recordIndexing(payload, indexedResults)
     }
   }
 
@@ -171,7 +218,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
         const bodyChunks = chunkText(bodyText)
         for (let i = 0; i < bodyChunks.length; i++) {
           const chunkTextContent = bodyChunks[i].text
-          const vector = await embedText(chunkTextContent)
+          const vector = await embedText(chunkTextContent, "RETRIEVAL_DOCUMENT")
           const pointId = randomUUID()
           await upsertChunk(pointId, vector, {
             contentId,
@@ -188,14 +235,14 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
         }
       }
 
-      return [
+      return recordIndexing(payload, [
         {
           qdrantPointId: randomUUID(),
           chunkIndex: 0,
           text: `Indexed video: ${videoRes.indexedAudioChunks} audio chunks, ${videoRes.indexedFrames} frame vectors. Cloudinary: ${videoRes.cloudinaryUrl}`,
           tokenCount: 15,
         },
-      ]
+      ])
     }
     // No sourceUrl — fall through to index any body text below
   }
@@ -210,7 +257,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
   for (let i = 0; i < chunks.length; i++) {
     const chunkObj = chunks[i]
     const chunkTextContent = chunkObj.text
-    const vector = await embedText(chunkTextContent)
+    const vector = await embedText(chunkTextContent, "RETRIEVAL_DOCUMENT")
     const pointId = randomUUID()
 
     await upsertChunk(pointId, vector, {
@@ -234,11 +281,11 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
     })
   }
 
-  return indexedResults
+  return recordIndexing(payload, indexedResults)
 }
 
 /**
- * Performs parallel cross-modal RAG retrieval and answers user query with Groq LLM (llama-3.3-70b-versatile).
+ * Performs parallel cross-modal RAG retrieval and answers user query with Groq LLM (config.groqLlmModel).
  */
 export async function askWithRag(
   userId: string,
@@ -251,7 +298,7 @@ export async function askWithRag(
   }
 
   const [groqTextVector, clipTextVector] = await Promise.all([
-    embedText(query),
+    embedText(query, "RETRIEVAL_QUERY"),
     embedTextClip(query).catch(() => [] as number[]),
   ])
 
@@ -277,11 +324,9 @@ export async function askWithRag(
   }))
 
   // Split: real content (notes, audio, video, pdf) vs image tag descriptions stored in rag_text
-  // Image tag chunks in rag_text have modality="image" — they need a stricter threshold
-  // so they don't crowd out actual notes when the query is about non-image content.
-  const IMAGE_TAG_SCORE_THRESHOLD = 0.35
+  // Image tag chunks in rag_text have modality="image"
   const noteHits = allTextHits.filter((h) =>
-    h.modality !== "image" || h.score >= IMAGE_TAG_SCORE_THRESHOLD
+    h.modality !== "image" || h.score >= config.imageTagScoreThreshold
   )
 
   const formattedImageHits: RAGSourceContext[] = imageHits.map((h) => ({
@@ -303,8 +348,7 @@ export async function askWithRag(
     ? validateContextRelevance(noteHits)
     : { hasSufficientContext: noteHits.length > 0, filteredSources: noteHits }
 
-  // CLIP image hits come from the dedicated rag_images collection and are always included —
-  // no hard score floor here since image queries naturally score lower (0.20-0.30 is normal for CLIP)
+  // CLIP image hits come from the dedicated rag_images collection and are always included
   const imageCheck = formattedImageHits.length >= 3
     ? validateContextRelevance(formattedImageHits)
     : { hasSufficientContext: formattedImageHits.length > 0, filteredSources: formattedImageHits }
@@ -321,11 +365,10 @@ export async function askWithRag(
     : 0
 
   const finalTextHits = topImageScore > topTextScore
-    ? textCheck.filteredSources.filter((h) => h.score >= 0.35)
+    ? textCheck.filteredSources.filter((h) => h.score >= config.imageFocusedTextScoreThreshold)
     : textCheck.filteredSources
 
   // Merge: real content first, then CLIP image hits — both sorted by score desc
-  // This ensures notes/audio/video rank ahead of image tags at equal scores
   const realContentSorted = finalTextHits.sort((a, b) => b.score - a.score)
   const clipImagesSorted = imageCheck.filteredSources.sort((a, b) => b.score - a.score)
 
@@ -337,13 +380,10 @@ export async function askWithRag(
     return modalityCounts[mod] <= 3
   })
 
-  // Minimum overall relevance gate:
-  // If every hit scores below 0.21, nothing is truly relevant to this query.
-  // Blocks cases like asking about "video" when no video is indexed (all hits score ~0.0–0.20).
-  // CLIP image scores naturally land at 0.22–0.25, so they still pass.
-  const MIN_OVERALL_SCORE = 0.21
+  // Minimum overall relevance gate: if every hit scores below
+  // config.minOverallScore, nothing is truly relevant to this query.
   const bestScore = cappedHits.length > 0 ? Math.max(...cappedHits.map((h) => h.score)) : 0
-  if (bestScore < MIN_OVERALL_SCORE) {
+  if (bestScore < config.minOverallScore) {
     return {
       answer: "I could not find sufficient context in your knowledge base to answer this question accurately.",
       sources: [],
@@ -359,7 +399,62 @@ export async function askWithRag(
   }
 }
 
-export async function reindexUserContent(userId: string, contents: any[] = [], force = false): Promise<{ scanned: number; reindexed: number; failed: number; skipped: number }> {
-  console.log(`Reindexing requested for user: ${userId}, force: ${force}`)
-  return { scanned: contents.length, reindexed: contents.length, failed: 0, skipped: 0 }
+/**
+ * Reindexes a user's content when it's missing from Qdrant/Postgres or was
+ * indexed under a different embeddingModel than config.embeddingModel (e.g.
+ * content indexed under the old hash-based fallback before Task 1). The
+ * caller (apps/web) supplies the content list since it owns the Content
+ * table — rag-backend only tracks RagDocument (what's already indexed).
+ */
+export async function reindexUserContent(
+  userId: string,
+  contents: RagReindexContentItem[] = [],
+  force = false
+): Promise<{
+  scanned: number
+  reindexed: number
+  failed: number
+  skipped: number
+  results: Array<{ contentId: string; status: "reindexed" | "skipped" | "failed"; error?: string }>
+}> {
+  let reindexed = 0
+  let failed = 0
+  let skipped = 0
+  const results: Array<{ contentId: string; status: "reindexed" | "skipped" | "failed"; error?: string }> = []
+
+  for (const item of contents) {
+    const existing = await prisma.ragDocument.findMany({
+      where: { userId, contentId: item.contentId },
+      select: { embeddingModel: true },
+    })
+
+    const isStale = existing.some((d) => d.embeddingModel !== config.embeddingModel)
+    const needsReindex = force || existing.length === 0 || isStale
+
+    if (!needsReindex) {
+      skipped += 1
+      results.push({ contentId: item.contentId, status: "skipped" })
+      continue
+    }
+
+    try {
+      await indexContent({
+        contentId: item.contentId,
+        userId,
+        sourceType: item.sourceType,
+        sourceUrl: item.sourceUrl ?? null,
+        sourceName: item.sourceName ?? null,
+        text: item.text ?? undefined,
+      })
+      reindexed += 1
+      results.push({ contentId: item.contentId, status: "reindexed" })
+    } catch (err) {
+      failed += 1
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(`reindexUserContent: failed to reindex ${item.contentId}:`, err)
+      results.push({ contentId: item.contentId, status: "failed", error: message })
+    }
+  }
+
+  return { scanned: contents.length, reindexed, failed, skipped, results }
 }
