@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import toast, { Toaster } from "react-hot-toast"
+import { Search, Plus, Share2, ChevronDown, Globe, Users, Copy } from "lucide-react"
 
 interface TopBarProps {
   onSearch?: (q: string) => void
@@ -66,56 +67,60 @@ export default function TopBar({ onSearch, searchValue = "" }: TopBarProps) {
   }
 
   return (
-    <div className="h-full w-full flex justify-between items-center border-b px-4 transition-colors duration-300" style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}>
+    <div className="h-full w-full flex justify-between items-center gap-2 border-b pl-16 pr-4 md:px-4 transition-colors duration-300" style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}>
       <Toaster position="bottom-right" reverseOrder />
       {/* Avatar */}
-      <div className="flex items-center gap-3 min-w-[200px]">
+      <div className="hidden sm:flex items-center gap-3 min-w-0 flex-shrink-0">
         <div className="h-9 w-9 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0" style={{ background: "var(--accent)" }}>
           {username.charAt(0).toUpperCase()}
         </div>
-        <div>
-          <p className="text-sm font-semibold leading-none" style={{ color: "var(--text-primary)" }}>{username}</p>
+        <div className="hidden lg:block min-w-0">
+          <p className="text-sm font-semibold leading-none truncate" style={{ color: "var(--text-primary)" }}>{username}</p>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Welcome back!</p>
         </div>
       </div>
 
       {/* Search */}
-      <div className="flex-1 max-w-md mx-4 relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input type="text" placeholder="Search by title or tag..." className="w-full h-9 rounded-full pl-9 pr-4 text-sm border focus:outline-none transition-all duration-200"
-          style={{ background: "var(--input-bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+      <div className="flex-1 min-w-0 max-w-md relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} strokeWidth={2} />
+        <input type="text" placeholder="Search notes..." aria-label="Search notes by title or tag" className="w-full h-9 rounded-full pl-9 pr-4 text-sm border focus:outline-none focus:ring-2 transition-all duration-200"
+          style={{ background: "var(--input-bg)", borderColor: "var(--border)", color: "var(--text-primary)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
           value={search} onChange={(e) => { setSearch(e.target.value); onSearch?.(e.target.value) }} />
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
-        <button className="h-9 px-4 text-sm font-medium rounded-full border transition-all duration-200 hover:shadow"
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button className="h-9 px-3 sm:px-4 text-sm font-medium rounded-full border transition-all duration-200 hover:shadow whitespace-nowrap flex items-center gap-1.5"
           style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
           onClick={() => router.push("/addItem")}>
-          + New Note
+          <Plus className="w-4 h-4" strokeWidth={2.5} />
+          <span className="hidden sm:inline">New Note</span>
         </button>
 
         {/* Share All Notes */}
         <div className="relative">
-          <button className="h-9 px-4 text-sm font-medium text-white rounded-full transition-all duration-200 hover:shadow-lg"
+          <button className="h-9 px-3 sm:px-4 text-sm font-medium text-white rounded-full transition-all duration-200 hover:shadow-lg whitespace-nowrap flex items-center gap-1.5"
             style={{ background: "var(--accent)" }}
-            onClick={() => setOpen((p) => !p)}>
-            Share All Notes ▾
+            onClick={() => setOpen((p) => !p)}
+            aria-expanded={open}
+            aria-label="Share all notes">
+            <Share2 className="w-4 h-4" strokeWidth={2} />
+            <span className="hidden sm:inline">Share All Notes</span>
+            <ChevronDown className="hidden sm:inline w-3.5 h-3.5" strokeWidth={2.5} />
           </button>
 
           {open && (
-            <div className="absolute right-0 mt-2 w-96 rounded-xl border shadow-xl z-50 p-4" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+            <div className="absolute right-0 mt-2 w-[88vw] max-w-96 rounded-xl border shadow-xl z-50 p-4" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
               <p className="font-semibold text-sm mb-3" style={{ color: "var(--text-primary)" }}>Share All Notes</p>
 
               {/* Mode tabs */}
               <div className="flex rounded-lg overflow-hidden border mb-4" style={{ borderColor: "var(--border)" }}>
                 {(["public", "friends"] as const).map((mode) => (
                   <button key={mode} onClick={() => setShareMode(mode)}
-                    className="flex-1 py-1.5 text-xs font-medium capitalize transition-all"
+                    className="flex-1 py-1.5 text-xs font-medium capitalize transition-all flex items-center justify-center gap-1.5"
                     style={{ background: shareMode === mode ? "var(--accent)" : "var(--input-bg)", color: shareMode === mode ? "#fff" : "var(--text-secondary)" }}>
-                    {mode === "public" ? "🌍 Public Link" : "👥 With Friends"}
+                    {mode === "public" ? <Globe className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
+                    {mode === "public" ? "Public Link" : "With Friends"}
                   </button>
                 ))}
               </div>
@@ -138,7 +143,9 @@ export default function TopBar({ onSearch, searchValue = "" }: TopBarProps) {
                       <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>Anyone with this link can view your notes:</p>
                       <div className="flex gap-2">
                         <input readOnly value={shareLink} className="flex-1 p-1.5 text-xs rounded border" style={{ background: "var(--input-bg)", borderColor: "var(--border)", color: "var(--text-primary)" }} onFocus={(e) => e.target.select()} />
-                        <button className="px-2.5 py-1.5 text-xs text-white rounded font-medium" style={{ background: "var(--accent)" }} onClick={() => copy(shareLink)}>Copy</button>
+                        <button className="px-2.5 py-1.5 text-xs text-white rounded font-medium flex items-center gap-1 flex-shrink-0" style={{ background: "var(--accent)" }} onClick={() => copy(shareLink)}>
+                          <Copy className="w-3 h-3" /> Copy
+                        </button>
                       </div>
                     </div>
                   )}

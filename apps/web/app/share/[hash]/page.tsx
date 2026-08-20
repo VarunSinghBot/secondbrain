@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db"
+import { Lock, Clock, FileQuestion, Brain } from "lucide-react"
 
 export default async function SharePage({ params }: { params: Promise<{ hash: string }> }) {
   const { hash } = await params
@@ -16,7 +17,7 @@ export default async function SharePage({ params }: { params: Promise<{ hash: st
     if (!note.shareEnabled) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#faf9f6] p-4 text-center">
-          <span className="text-5xl mb-4">🔒</span>
+          <Lock className="w-12 h-12 mb-4 text-gray-400" strokeWidth={1.5} />
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Sharing Disabled</h1>
           <p className="text-gray-500 max-w-md">The owner of this note has turned off public link sharing.</p>
         </div>
@@ -26,7 +27,7 @@ export default async function SharePage({ params }: { params: Promise<{ hash: st
     if (note.shareExpiresAt && new Date(note.shareExpiresAt) < new Date()) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#faf9f6] p-4 text-center">
-          <span className="text-5xl mb-4">⏰</span>
+          <Clock className="w-12 h-12 mb-4 text-gray-400" strokeWidth={1.5} />
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Link Expired</h1>
           <p className="text-gray-500 max-w-md">This shared note link has expired. Ask the author to extend or generate a new link.</p>
         </div>
@@ -44,7 +45,9 @@ export default async function SharePage({ params }: { params: Promise<{ hash: st
           {/* Header */}
           <div className="mb-10 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: "#e1434b" }}>S</div>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white" style={{ background: "#e1434b" }}>
+                <Brain className="w-5 h-5" strokeWidth={2.25} />
+              </div>
               <h1 className="text-xl font-bold" style={{ color: "#e1434b" }}>Second Brain</h1>
               <span className="text-sm text-gray-400 ml-2">— Shared Note</span>
             </div>
@@ -134,7 +137,7 @@ export default async function SharePage({ params }: { params: Promise<{ hash: st
   if (!globalLink || !globalLink.author.Content.length) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#faf9f6] p-4 text-center">
-        <span className="text-5xl mb-4">🔍</span>
+        <FileQuestion className="w-12 h-12 mb-4 text-gray-400" strokeWidth={1.5} />
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Note Not Found</h1>
         <p className="text-gray-500 max-w-md">This link is invalid or the note has been removed.</p>
       </div>
@@ -150,7 +153,9 @@ export default async function SharePage({ params }: { params: Promise<{ hash: st
     <div className="min-h-screen bg-[#faf9f6] py-12 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="mb-10 flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: "#e1434b" }}>S</div>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white" style={{ background: "#e1434b" }}>
+            <Brain className="w-5 h-5" strokeWidth={2.25} />
+          </div>
           <h1 className="text-xl font-bold" style={{ color: "#e1434b" }}>Second Brain</h1>
           <span className="text-sm text-gray-400 ml-2">— Shared Notes</span>
         </div>
