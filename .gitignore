@@ -5,3 +5,12 @@ dist/
 *.env
 .env.local
 .DS_Store
+
+# Python virtualenv for clip-sidecar (created locally, not shared via git)
+clip-sidecar/.venv/
+
+# Local job store for rag-backend's file-based queue (worker/queue.ts) —
+# contains real ingested content text from local runs, and is per-machine
+# state, not something to share via git.
+apps/rag-backend/.rag_jobs.json
+apps/rag-backend/.rag_jobs.*.tmp
