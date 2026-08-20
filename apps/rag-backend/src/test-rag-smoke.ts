@@ -8,7 +8,7 @@ import dotenv from "dotenv"
 dotenv.config()
 
 import { randomUUID } from "node:crypto"
-import { embedText } from "./lib/groq-embeddings"
+import { embedText } from "./lib/embeddings"
 import { upsertChunk, searchSimilar, deleteContentVectors, ensureCollections } from "./lib/qdrant"
 import { generateGroqAnswer } from "./lib/groq"
 import { buildGroundedSystemPrompt, validateContextRelevance, validateUserQuery, type RAGSourceContext } from "./lib/guardrails"
@@ -33,12 +33,12 @@ async function run() {
   console.log("═══════════════════════════════════════════════════════\n")
 
   // 1. Groq Embedding
-  console.log("🔌 1. Groq Embedding (nomic-embed-text-v1.5)")
+  console.log("🔌 1. Gemini Embedding (gemini-embedding-001)")
   try {
-    const vec = await embedText("Test query for embedding")
-    check("Groq embedText", vec.length === 768, `Vector dim=${vec.length}, first3=[${vec.slice(0, 3).map(v => v.toFixed(4)).join(", ")}]`)
+    const vec = await embedText("Test query for embedding", "RETRIEVAL_QUERY")
+    check("Gemini embedText", vec.length === 768, `Vector dim=${vec.length}, first3=[${vec.slice(0, 3).map(v => v.toFixed(4)).join(", ")}]`)
   } catch (e) {
-    check("Groq embedText", false, String(e))
+    check("Gemini embedText", false, String(e))
   }
 
   // 2. Guardrails validation
@@ -83,7 +83,7 @@ async function run() {
   // 5. Direct Qdrant searchSimilar
   console.log("\n🔍 5. Qdrant Vector Search")
   try {
-    const queryVec = await embedText("What is RAG and how does it work?")
+    const queryVec = await embedText("What is RAG and how does it work?", "RETRIEVAL_QUERY")
     const hits = await searchSimilar(queryVec, testUserId, 5)
     check("searchSimilar (rag_text)", hits.length > 0, `Retrieved ${hits.length} hit(s), top score=${hits[0]?.score?.toFixed(4)}`)
     if (hits[0]) {
@@ -99,7 +99,7 @@ async function run() {
   // 6. Context relevance guardrail
   console.log("\n🎯 6. Context Relevance Guardrail")
   try {
-    const queryVec = await embedText("retrieval augmented generation")
+    const queryVec = await embedText("retrieval augmented generation", "RETRIEVAL_QUERY")
     const hits = await searchSimilar(queryVec, testUserId, 5)
     const sources: RAGSourceContext[] = hits.map((h) => ({
       contentId: String(h.payload?.contentId ?? ""),

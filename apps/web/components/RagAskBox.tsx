@@ -11,7 +11,11 @@ export default function RagAskBox() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  // Auto-index any unindexed content by default when dashboard loads
+  // Auto-index any missing/stale content by default when dashboard loads.
+  // force:false is intentional — rag-backend's own embeddingModel-staleness
+  // check already catches content indexed under an old model (e.g. the old
+  // fake embeddings), so this doesn't need to force a full re-embed of
+  // already-current content on every single page load.
   useEffect(() => {
     fetch("/api/rag/reindex", {
       method: "POST",

@@ -8,7 +8,7 @@ import { downloadUrl } from "./download"
 import { transcribeAudio } from "./groq"
 import { embedImage, tagImage } from "./clip-client"
 import { chunkText } from "./text"
-import { embedText } from "./groq-embeddings"
+import { embedText } from "./embeddings"
 import { upsertChunk, upsertImageVector } from "./qdrant"
 import { uploadToCloudinary } from "./cloudinary"
 import { config } from "./config"
@@ -71,7 +71,7 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
           for (let i = 0; i < textChunks.length; i++) {
             const chunkObj = textChunks[i]
             const chunkTextContent = chunkObj.text
-            const embedding = await embedText(chunkTextContent)
+            const embedding = await embedText(chunkTextContent, "RETRIEVAL_DOCUMENT")
             const pointId = randomUUID()
             await upsertChunk(pointId, embedding, {
               contentId,
@@ -140,7 +140,7 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
           text: tagText,
         })
 
-        const textVec = await embedText(tagText)
+        const textVec = await embedText(tagText, "RETRIEVAL_DOCUMENT")
         const txtPointId = randomUUID()
         await upsertChunk(txtPointId, textVec, {
           contentId: `${contentId}-frame-${idx}-desc`,
