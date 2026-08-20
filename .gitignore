@@ -6,6 +6,10 @@ dist/
 .env.local
 .DS_Store
 
+# Generated Prisma client output for rag-backend (~10k lines, regenerate
+# with `pnpm db:generate`) — not shared via git.
+apps/rag-backend/src/generated/
+
 # Python virtualenv for clip-sidecar (created locally, not shared via git)
 clip-sidecar/.venv/
 
