@@ -34,13 +34,14 @@
                       (Top-K similarity search scoped to userId)
                                             ↓
                            [ GUARDRAIL 2: Relevance Cutoff ]
-                   (Filters hits below minRelevanceScore = 0.35 cutoff)
+                (Filters hits below the configured relevance thresholds —
+                         see Environment Configuration below)
                                             ↓
                         [ GUARDRAIL 3: Grounded Prompting ]
            (Constructs strict context prompt with [1] citations & CDN links)
                                             ↓
-                          [ Groq LLaMA-3 LLM Generation ]
-                      (Groq llama-3.3-70b-versatile engine response)
+                          [ Groq LLM Generation ]
+                      (Groq openai/gpt-oss-120b engine response)
                                             ↓
                        [ GUARDRAIL 4: Grounding Verification ]
               (Ensures no hallucinated fallback when context is missing)
@@ -50,13 +51,13 @@
 
 ## Key Features
 
-1. **Groq LLaMA-3 Generation**: High-speed, low-latency grounded question answering powered by `llama-3.3-70b-versatile`.
+1. **Groq LLM Generation**: High-speed, low-latency grounded question answering powered by `openai/gpt-oss-120b` (configurable via `GROQ_LLM_MODEL`).
 2. **Groq Whisper ASR**: Automatic speech recognition for audio notes and video tracks using `whisper-large-v3`.
 3. **Qdrant Vector Database**: Scalable vector search with strict multi-tenant data isolation (`userId`).
 4. **Cloudinary CDN Integration**: Automatic file persistence and CDN URL generation for image, audio, and video items.
 5. **4-Tier Guardrails Engine**:
    - **Input Guardrail**: Rejects empty strings, queries > 2000 chars, and adversarial prompt injections.
-   - **Context Relevance Guardrail**: Discards search hits below `minRelevanceScore = 0.35`.
+   - **Context Relevance Guardrail**: Discards search hits below the configured relevance thresholds (`MIN_RELEVANCE_SCORE`, `IMAGE_TAG_SCORE_THRESHOLD`, `IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD`, `MIN_OVERALL_SCORE` — see Environment Configuration).
    - **System Prompt Guardrail**: Forces strict context bounding, numeric citations (`[1]`, `[2]`), and Cloudinary links.
    - **Grounding Verification**: Ensures ungrounded fallback when relevance criteria fail.
 
@@ -66,31 +67,86 @@
 
 Create a `.env` file in `apps/rag-backend/`:
 
+This list matches `.env.example` exactly — copy that file to `.env` and fill
+in real values rather than retyping it here.
+
 ```env
-# Server Port
+# Server
 RAG_BACKEND_PORT=8090
 
-# Groq API (ASR & LLM Generation)
-GROQ_API_KEY="gsk_..."
-GROQ_LLM_MODEL="llama-3.3-70b-versatile"
+# Postgres (Prisma — RagDocument indexing-state tracking, see Reindexing below)
+DATABASE_URL="postgresql://user:password@localhost:5432/secondbrain"
+
+# Groq API (LLM answer generation & Whisper ASR)
+GROQ_API_KEY="your-groq-api-key"
+GROQ_LLM_MODEL="openai/gpt-oss-120b"
 GROQ_ASR_MODEL="whisper-large-v3"
 
+# Gemini API (embeddings — gemini-embedding-001, fixed, not env-overridable)
+GEMINI_API_KEY="your-gemini-api-key"
+
 # Qdrant Vector Database
-QDRANT_URL="https://your-cluster.cloud.qdrant.io"
+QDRANT_URL="https://your-cluster.qdrant.tech"
 QDRANT_API_KEY="your-qdrant-api-key"
-QDRANT_COLLECTION="secondbrain-rag"
+QDRANT_COLLECTION="rag_text"
+QDRANT_IMAGE_COLLECTION="rag_images"
+QDRANT_VECTOR_SIZE=768
+
+# CLIP sidecar — local service, see "Required Running Services" above
+CLIP_SIDECAR_URL="http://localhost:8001"
 
 # Cloudinary CDN Media Storage
-CLOUDINARY_CLOUD_NAME="your-cloud-name"
-CLOUDINARY_API_KEY="your-api-key"
-CLOUDINARY_API_SECRET="your-api-secret"
+CLOUDINARY_CLOUD_NAME="your-cloudinary-cloud-name"
+CLOUDINARY_API_KEY="your-cloudinary-api-key"
+CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
 
-# Optional Services & Guardrails
-MIN_RELEVANCE_SCORE=0.35
+# Optional Services
 OCR_SPACE_API_KEY="your-ocr-space-api-key"
 LLAMA_CLOUD_API_KEY="your-llama-cloud-api-key"
-GEMINI_API_KEY="your-gemini-api-key"
+
+# Admin endpoints (POST /admin/reset-collections, GET /admin/inspect) —
+# sent as the x-admin-secret header
+ADMIN_SECRET="your-admin-secret"
+
+# Retrieval Relevance Guardrails
+# Carried over unchanged from the values previously hardcoded/documented —
+# NOT re-tuned. They were set against the old hash-based fallback embedding;
+# cosine similarity distributions differ meaningfully between that and real
+# Gemini embeddings, so these need empirical re-tuning now that retrieval
+# runs on real embeddings. That re-tuning has not happened yet.
+MIN_RELEVANCE_SCORE=0.2
+IMAGE_TAG_SCORE_THRESHOLD=0.35
+IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD=0.35
+MIN_OVERALL_SCORE=0.21
 ```
+
+---
+
+## Required Running Services
+
+Besides the cloud services configured above (Qdrant, Postgres, Cloudinary, Groq,
+Gemini), one service has to be running **locally** before you start rag-backend:
+
+- **CLIP sidecar** (`../../clip-sidecar`) — a separate Python/FastAPI service
+  that generates CLIP image embeddings and tags for image ingestion in
+  `clip` mode (`POST /index` with an image, `mode: "clip"`). rag-backend
+  talks to it over HTTP at `CLIP_SIDECAR_URL` (default
+  `http://localhost:8001`); it is **not** started automatically by `pnpm dev`.
+  Without it running, image uploads in `clip` mode fail with a `503` naming
+  the sidecar — OCR-mode image ingestion and all other content types are
+  unaffected.
+
+  Run it directly:
+  ```bash
+  cd clip-sidecar
+  pip install -r requirements.txt
+  uvicorn main:app --host 0.0.0.0 --port 8001
+  ```
+  Or via the repo's `docker-compose.yml`, which starts Qdrant, the CLIP
+  sidecar, and rag-backend together:
+  ```bash
+  docker compose up clip-sidecar
+  ```
 
 ---
 
