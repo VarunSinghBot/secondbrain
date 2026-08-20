@@ -2,12 +2,12 @@ import cors from "cors"
 import dotenv from "dotenv"
 import express, { Request, Response } from "express"
 
-import type { RagAskRequest, RagAskResponse, RagIndexRequest, RagVerifyRequest, RagVerifyResponse } from "@secondbrain/types"
+import type { RagAskRequest, RagAskResponse, RagIndexRequest, RagReindexBatchRequest, RagReindexBatchResponse, RagVerifyRequest, RagVerifyResponse } from "@secondbrain/types"
 
-import { askWithRag, indexContent } from "./services/indexer"
+import { askWithRag, indexContent, reindexUserContent } from "./services/indexer"
 import { addJob, getJob, startWorker } from "./worker/queue"
-import { embedText } from "./lib/groq-embeddings"
-import { embedTextClip } from "./lib/clip-client"
+import { embedText } from "./lib/embeddings"
+import { ClipSidecarUnavailableError, embedTextClip } from "./lib/clip-client"
 import { searchSimilar, searchSimilarImages } from "./lib/qdrant"
 import { generateGroqAnswer } from "./lib/groq"
 import { buildGroundedSystemPrompt, validateUserQuery } from "./lib/guardrails"
@@ -47,9 +47,27 @@ app.post("/index", async (req: Request<unknown, unknown, RagIndexRequest>, res: 
       })),
     })
   } catch (error) {
+    if (error instanceof ClipSidecarUnavailableError) {
+      return res.status(503).json({ error: error.message })
+    }
     return res.status(500).json({
       error: error instanceof Error ? error.message : "Indexing failed",
     })
+  }
+})
+
+app.post("/reindex", async (req: Request<unknown, unknown, RagReindexBatchRequest>, res: Response<RagReindexBatchResponse | { error: string }>) => {
+  const { userId, contents, force = false } = req.body ?? {}
+
+  if (!userId || !Array.isArray(contents)) {
+    return res.status(400).json({ error: "userId and contents[] are required" })
+  }
+
+  try {
+    const result = await reindexUserContent(userId, contents, force)
+    return res.json(result)
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : "Reindex failed" })
   }
 })
 
@@ -115,7 +133,7 @@ app.post("/verify", async (req: Request<unknown, unknown, RagVerifyRequest>, res
 
   try {
     const [groqTextVec, clipTextVec] = await Promise.all([
-      embedText(question),
+      embedText(question, "RETRIEVAL_QUERY"),
       embedTextClip(question).catch(() => [] as number[]),
     ])
 

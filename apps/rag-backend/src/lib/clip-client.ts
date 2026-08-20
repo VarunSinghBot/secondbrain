@@ -5,16 +5,36 @@ export interface TagImageResponse {
   scores: Record<string, number>
 }
 
+// Thrown specifically when the CLIP sidecar can't be reached at all (it's
+// not running, wrong port, etc.) — as opposed to it being up but returning
+// an error. Callers use this distinction to return 503 (service down) vs
+// 500 (something else went wrong) instead of a bare 500 either way.
+export class ClipSidecarUnavailableError extends Error {
+  constructor(url: string, cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(`CLIP sidecar unavailable: could not reach ${url}. Is the CLIP sidecar running (see CLIP_SIDECAR_URL)? (${reason})`)
+    this.name = "ClipSidecarUnavailableError"
+  }
+}
+
+async function fetchSidecar(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (err) {
+    // fetch() only throws for connection-level failures (refused, DNS,
+    // reset, timeout) — a reachable server that errors returns a normal
+    // (non-ok) Response instead, handled separately by each caller below.
+    throw new ClipSidecarUnavailableError(url, err)
+  }
+}
+
 export async function embedImage(imageBuffer: Buffer, mimeType = "image/jpeg"): Promise<number[]> {
   const url = `${config.clipSidecarUrl.replace(/\/$/, "")}/embed-image`
   const formData = new FormData()
   const ext = mimeType.split("/")[1] || "jpeg"
   formData.append("file", new Blob([imageBuffer], { type: mimeType }), `image.${ext}`)
 
-  const res = await fetch(url, {
-    method: "POST",
-    body: formData,
-  })
+  const res = await fetchSidecar(url, { method: "POST", body: formData })
 
   if (!res.ok) {
     throw new Error(`CLIP embed-image failed: ${res.status} ${res.statusText}`)
@@ -29,7 +49,7 @@ export async function embedImage(imageBuffer: Buffer, mimeType = "image/jpeg"): 
 
 export async function embedTextClip(text: string): Promise<number[]> {
   const url = `${config.clipSidecarUrl.replace(/\/$/, "")}/embed-text-clip`
-  const res = await fetch(url, {
+  const res = await fetchSidecar(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -56,10 +76,7 @@ export async function tagImage(imageBuffer: Buffer, mimeType = "image/jpeg", thr
   const ext = mimeType.split("/")[1] || "jpeg"
   formData.append("file", new Blob([imageBuffer], { type: mimeType }), `image.${ext}`)
 
-  const res = await fetch(url, {
-    method: "POST",
-    body: formData,
-  })
+  const res = await fetchSidecar(url, { method: "POST", body: formData })
 
   if (!res.ok) {
     throw new Error(`CLIP tag-image failed: ${res.status} ${res.statusText}`)
