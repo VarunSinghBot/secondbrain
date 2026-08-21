@@ -28,6 +28,22 @@ async function runFfmpeg(args: string[]): Promise<void> {
   })
 }
 
+// CLIP embeddings from the sidecar are already L2-normalized, so a plain dot
+// product would do — this stays a full cosine calculation so correctness
+// doesn't silently depend on that upstream normalization detail.
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  if (normA === 0 || normB === 0) return 0
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
 // ffprobe ships alongside ffmpeg (same apt/brew package), used here only to
 // learn the video's duration so keyframes can be timestamped and sampled at
 // even wall-clock intervals rather than even frame-count intervals.
@@ -157,6 +173,13 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
     // many ffmpeg produced (fps rounding can be off by one frame either way).
     const frameInterval = frameFiles.length > 0 ? durationSeconds / frameFiles.length : 0
 
+    // CLIP embeddings of frames already kept from this video, this run — used
+    // to drop near-duplicate frames (a static/slow-moving video otherwise
+    // fills most of maxVideoFrames with near-identical content, see
+    // config.videoFrameDedupeThreshold).
+    const keptFrameEmbeddings: number[][] = []
+    let duplicateFramesSkipped = 0
+
     for (let idx = 0; idx < frameFiles.length; idx++) {
       const fName = frameFiles[idx]
       const fPath = join(tempDir, fName)
@@ -164,10 +187,18 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
       const timestampSeconds = Math.round(idx * frameInterval)
 
       try {
-        const [clipVec, tags] = await Promise.all([
-          embedImage(frameBuffer, "image/jpeg"),
-          tagImage(frameBuffer, "image/jpeg").catch(() => []),
-        ])
+        const clipVec = await embedImage(frameBuffer, "image/jpeg")
+
+        const isDuplicate = keptFrameEmbeddings.some(
+          (kept) => cosineSimilarity(clipVec, kept) >= config.videoFrameDedupeThreshold
+        )
+        if (isDuplicate) {
+          duplicateFramesSkipped++
+          continue
+        }
+        keptFrameEmbeddings.push(clipVec)
+
+        const tags = await tagImage(frameBuffer, "image/jpeg").catch(() => [])
 
         // A flowing sentence, not a labeled field dump — this is what gets
         // embedded and later shown to the LLM as retrieved context, and the
@@ -222,6 +253,13 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
       } catch (frameErr) {
         console.warn(`Failed to process frame ${idx}:`, frameErr)
       }
+    }
+
+    if (duplicateFramesSkipped > 0) {
+      console.log(
+        `Video ${contentId}: skipped ${duplicateFramesSkipped} of ${frameFiles.length} sampled frame(s) ` +
+        `as near-duplicates (cosine >= ${config.videoFrameDedupeThreshold}) of an already-kept frame`
+      )
     }
 
     if (indexedAudioChunks === 0 && indexedFrames === 0) {

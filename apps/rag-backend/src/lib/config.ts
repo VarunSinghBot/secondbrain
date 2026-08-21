@@ -95,6 +95,17 @@ export const config = {
   // or ones with fast-changing visual content, where 8 evenly-spaced frames
   // may be too sparse.
   maxVideoFrames: Number(getEnv("MAX_VIDEO_FRAMES") ?? 8),
+
+  // A sampled video frame is dropped (not written to Qdrant at all) if its
+  // CLIP embedding is at least this cosine-similar to a frame already kept
+  // from the same video in the same indexing run (video.ts). Confirmed live:
+  // a static/slow-moving test video had 6 of its 8 sampled frames be
+  // near-duplicates, crowding out unrelated real content at retrieval time
+  // since searchSimilar's topK is a hard limit applied before any relevance
+  // filtering runs. Deliberately high/conservative — this should only catch
+  // true near-duplicate frames, not merely similar-looking ones from genuine
+  // motion.
+  videoFrameDedupeThreshold: Number(getEnv("VIDEO_FRAME_DEDUPE_THRESHOLD") ?? 0.97),
 }
 
 export function requireConfig(value: string, name: string): string {
