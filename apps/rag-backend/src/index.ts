@@ -1,16 +1,16 @@
 import cors from "cors"
 import dotenv from "dotenv"
-import express, { Request, Response } from "express"
+import express, { NextFunction, Request, Response } from "express"
 
 import type { RagAskRequest, RagAskResponse, RagIndexRequest, RagReindexBatchRequest, RagReindexBatchResponse, RagVerifyRequest, RagVerifyResponse } from "@secondbrain/types"
 
-import { askWithRag, indexContent, reindexUserContent } from "./services/indexer"
+import { askWithRag, indexContent, isVideoContent, reindexUserContent } from "./services/indexer"
 import { addJob, getJob, startWorker } from "./worker/queue"
 import { embedText } from "./lib/embeddings"
 import { ClipSidecarUnavailableError, embedTextClip } from "./lib/clip-client"
 import { searchSimilar, searchSimilarImages } from "./lib/qdrant"
 import { generateGroqAnswer } from "./lib/groq"
-import { buildGroundedSystemPrompt, validateUserQuery } from "./lib/guardrails"
+import { buildGroundedSystemPrompt, citedSourceIndices, labelForSource, validateUserQuery } from "./lib/guardrails"
 
 dotenv.config()
 
@@ -24,11 +24,49 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", service: "rag-backend" })
 })
 
-app.post("/index", async (req: Request<unknown, unknown, RagIndexRequest>, res: Response) => {
+// Every route below accepts a userId in the body/query and acts on that
+// user's data, trusting it entirely — there was no check that the caller is
+// actually allowed to act as that userId, only network isolation (assuming
+// only apps/web, which has already checked the person's login, can reach
+// this service). This enforces it here too: apps/web sends this same secret
+// with every internal request, checked before anything else runs. Separate
+// from ADMIN_SECRET (below) — that one gates genuinely destructive
+// operations and shouldn't be weakened by being reused for routine traffic.
+function requireInternalSecret(req: Request, res: Response, next: NextFunction) {
+  const provided = req.headers["x-internal-secret"]
+  const expected = process.env.RAG_INTERNAL_SECRET
+  if (!expected || provided !== expected) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+  next()
+}
+
+app.post("/index", requireInternalSecret, async (req: Request<unknown, unknown, RagIndexRequest>, res: Response) => {
   const payload = req.body
 
   if (!payload?.contentId || !payload.userId || !payload.sourceType) {
     return res.status(400).json({ error: "contentId, userId and sourceType are required" })
+  }
+
+  // Video is the one content type slow enough (download + ffmpeg + N CLIP
+  // round-trips per frame) that processing it inline blocks the caller for
+  // the full duration — apps/web's own POST/PATCH handlers already discard
+  // this response and treat indexing as fire-and-forget, so routing video
+  // through the existing async queue instead is a response-contract change
+  // nothing downstream actually depends on.
+  if (isVideoContent(payload)) {
+    try {
+      const jobId = await addJob(payload)
+      return res.status(202).json({
+        message: "Video queued for async processing",
+        contentId: payload.contentId,
+        userId: payload.userId,
+        jobId,
+        status: "queued",
+      })
+    } catch (error) {
+      return res.status(500).json({ error: error instanceof Error ? error.message : "Failed to enqueue video" })
+    }
   }
 
   try {
@@ -56,7 +94,7 @@ app.post("/index", async (req: Request<unknown, unknown, RagIndexRequest>, res: 
   }
 })
 
-app.post("/reindex", async (req: Request<unknown, unknown, RagReindexBatchRequest>, res: Response<RagReindexBatchResponse | { error: string }>) => {
+app.post("/reindex", requireInternalSecret, async (req: Request<unknown, unknown, RagReindexBatchRequest>, res: Response<RagReindexBatchResponse | { error: string }>) => {
   const { userId, contents, force = false } = req.body ?? {}
 
   if (!userId || !Array.isArray(contents)) {
@@ -71,7 +109,7 @@ app.post("/reindex", async (req: Request<unknown, unknown, RagReindexBatchReques
   }
 })
 
-app.post("/ask", async (req: Request<unknown, unknown, RagAskRequest>, res: Response<RagAskResponse | { error: string }>) => {
+app.post("/ask", requireInternalSecret, async (req: Request<unknown, unknown, RagAskRequest>, res: Response<RagAskResponse | { error: string }>) => {
   const payload = req.body
 
   if (!payload?.query || !payload.userId) {
@@ -81,9 +119,15 @@ app.post("/ask", async (req: Request<unknown, unknown, RagAskRequest>, res: Resp
   try {
     const { answer, sources } = await askWithRag(payload.userId, payload.query, payload.topK ?? 5)
 
-    return res.json({
-      answer,
-      citations: sources.map((source) => ({
+    // sources is in the exact order buildGroundedSystemPrompt numbered them
+    // ([1], [2], ...) — only keep the ones the answer actually cites, and
+    // preserve that original number rather than re-numbering sequentially,
+    // so a "[2]" in the answer text still points at the source labeled [2].
+    const cited = citedSourceIndices(answer)
+    const citations = sources
+      .map((source, i) => ({ source, index: i + 1 }))
+      .filter(({ index }) => cited.has(index))
+      .map(({ source, index }) => ({
         contentId: source.contentId,
         title: source.sourceName,
         sourceTitle: (source as any).sourceTitle || source.sourceName,
@@ -93,8 +137,12 @@ app.post("/ask", async (req: Request<unknown, unknown, RagAskRequest>, res: Resp
         cloudinaryUrl: source.cloudinaryUrl,
         chunkIndex: source.chunkIndex ?? 0,
         score: source.score,
-      })),
-    })
+        index,
+        label: labelForSource(source),
+        timestampSeconds: source.timestampSeconds ?? null,
+      }))
+
+    return res.json({ answer, citations })
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Ask failed"
     const isValidationError = /injection|restricted|invalid|guardrail/i.test(msg)
@@ -119,7 +167,7 @@ function computeGroundingVerdict(answer: string, hits: Array<{ textPreview?: str
   return "⚠️ Answer generated but overlap with context is low — check ingestion."
 }
 
-app.post("/verify", async (req: Request<unknown, unknown, RagVerifyRequest>, res: Response<RagVerifyResponse | { error: string }>) => {
+app.post("/verify", requireInternalSecret, async (req: Request<unknown, unknown, RagVerifyRequest>, res: Response<RagVerifyResponse | { error: string }>) => {
   const { question, userId, modalityFilter, topK = 5 } = req.body ?? {}
 
   if (!question || !userId) {
@@ -189,7 +237,7 @@ app.post("/verify", async (req: Request<unknown, unknown, RagVerifyRequest>, res
   }
 })
 
-app.post("/delete", async (req: Request, res: Response) => {
+app.post("/delete", requireInternalSecret, async (req: Request, res: Response) => {
   const { userId, contentId } = req.body ?? {}
 
   if (!userId || !contentId) {
@@ -207,7 +255,7 @@ app.post("/delete", async (req: Request, res: Response) => {
   }
 })
 
-app.post("/ingest-async", async (req: Request<unknown, unknown, RagIndexRequest>, res: Response) => {
+app.post("/ingest-async", requireInternalSecret, async (req: Request<unknown, unknown, RagIndexRequest>, res: Response) => {
   const payload = req.body
 
   if (!payload?.contentId || !payload.userId || !payload.sourceType) {
@@ -222,7 +270,7 @@ app.post("/ingest-async", async (req: Request<unknown, unknown, RagIndexRequest>
   }
 })
 
-app.get("/ingest-async/:jobId", async (req: Request, res: Response) => {
+app.get("/ingest-async/:jobId", requireInternalSecret, async (req: Request, res: Response) => {
   const rawJobId = req.params.jobId
   const jobId = Array.isArray(rawJobId) ? rawJobId[0] : rawJobId
   if (!jobId) return res.status(400).json({ error: "jobId is required" })

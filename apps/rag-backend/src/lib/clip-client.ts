@@ -66,7 +66,12 @@ export async function embedTextClip(text: string): Promise<number[]> {
   return data.embedding
 }
 
-export async function tagImage(imageBuffer: Buffer, mimeType = "image/jpeg", threshold = 0.18, topK = 8): Promise<string[]> {
+export async function tagImage(
+  imageBuffer: Buffer,
+  mimeType = "image/jpeg",
+  threshold = config.clipTagThreshold,
+  topK = config.clipTagTopN,
+): Promise<string[]> {
   const query = new URLSearchParams({
     threshold: threshold.toString(),
     top_k: topK.toString(),

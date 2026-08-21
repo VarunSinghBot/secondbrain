@@ -8,7 +8,7 @@ import { generateGroqAnswer, transcribeAudio } from "../lib/groq"
 import { processAndIndexImage } from "../lib/image"
 import { processAndIndexVideo } from "../lib/video"
 import { embedTextClip } from "../lib/clip-client"
-import { searchSimilar, searchSimilarImages, upsertChunk } from "../lib/qdrant"
+import { deleteContentVectors, searchSimilar, searchSimilarImages, upsertChunk } from "../lib/qdrant"
 import { chunkText, normalizeText } from "../lib/text"
 import { downloadUrl } from "../lib/download"
 import { parseDocumentFromUrl } from "../lib/llamaparse"
@@ -75,10 +75,27 @@ async function recordIndexing(
 }
 
 /**
+ * Same detection indexContent() itself uses to route to processAndIndexVideo
+ * — shared so the /index route can decide sync-vs-async before calling in,
+ * without the two ever drifting out of sync on what counts as "a video".
+ */
+export function isVideoContent(payload: Pick<RagIndexRequest, "sourceType" | "sourceUrl">): boolean {
+  return payload.sourceType === "video" || Boolean(payload.sourceUrl && payload.sourceUrl.match(/\.(mp4|webm|mov|avi)/i))
+}
+
+/**
  * Ingests content into Qdrant across modalities (text, pdf, image, audio, video) using Groq & CLIP sidecar.
  */
 export async function indexContent(payload: RagIndexRequest): Promise<IndexerChunkResult[]> {
   const { contentId, userId, sourceType, sourceUrl, sourceName, text: rawText, mode = "clip" } = payload
+
+  // Every branch below (notes, images, PDFs, audio, video + its frames)
+  // upserts fresh points under this same contentId with brand-new random
+  // point IDs, never reusing or checking for old ones — so without this,
+  // re-indexing on edit orphans every previous version's vectors in Qdrant:
+  // invisible to Postgres tracking, but still live and citable. A no-op
+  // filter match on first-ever indexing, real cleanup on every re-index.
+  await deleteContentVectors(userId, contentId)
 
   let cloudinaryUrl: string | null = null
 
@@ -203,7 +220,7 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
   }
 
   // 4. Video Files (Audio transcript + Uniform CLIP frame sampling)
-  if (sourceType === "video" || (sourceUrl && sourceUrl.match(/\.(mp4|webm|mov|avi)/i))) {
+  if (isVideoContent({ sourceType, sourceUrl })) {
     if (sourceUrl) {
       const videoRes = await processAndIndexVideo({
         userId,
@@ -310,6 +327,21 @@ export async function askWithRag(
     clipTextVector.length ? searchSimilarImages(clipTextVector, userId, 3).catch(() => []) : Promise.resolve([]),
   ])
 
+  // Distinct from "no relevant hits for THIS query" below — an empty library
+  // reads as a confusing search failure otherwise. Checked against raw
+  // retrieval (not RagDocument, which recordIndexing writes best-effort and
+  // can silently fail to track — e.g. on a content/user row that doesn't
+  // exist in Postgres — while the Qdrant vectors themselves are still very
+  // real and searchable). Qdrant's kNN search returns hits regardless of
+  // similarity score as long as any point exists for this userId, so zero
+  // raw hits in both collections means zero indexed content, full stop.
+  if (textHits.length === 0 && imageHits.length === 0) {
+    return {
+      answer: "You haven't added any notes, images, or files yet — add some content first, then ask me about it.",
+      sources: [],
+    }
+  }
+
   const allTextHits: RAGSourceContext[] = textHits.map((h) => ({
     contentId: String(h.payload?.contentId ?? "unknown"),
     userId: String(h.payload?.userId ?? userId),
@@ -321,12 +353,15 @@ export async function askWithRag(
     chunkIndex: Number(h.payload?.chunkIndex ?? 0),
     text: String(h.payload?.text ?? ""),
     score: h.score,
+    timestampSeconds: typeof h.payload?.timestampSeconds === "number" ? h.payload.timestampSeconds : null,
   }))
 
-  // Split: real content (notes, audio, video, pdf) vs image tag descriptions stored in rag_text
-  // Image tag chunks in rag_text have modality="image"
+  // Split: real content (notes, audio, video, pdf) vs tag-description chunks
+  // stored in rag_text. Image and video-frame tag chunks (modality "image" /
+  // "video_frame") get the same, lower floor so they don't crowd out real
+  // notes/audio when the query isn't about visual content.
   const noteHits = allTextHits.filter((h) =>
-    h.modality !== "image" || h.score >= config.imageTagScoreThreshold
+    (h.modality !== "image" && h.modality !== "video_frame") || h.score >= config.imageTagScoreThreshold
   )
 
   const formattedImageHits: RAGSourceContext[] = imageHits.map((h) => ({
@@ -342,6 +377,7 @@ export async function askWithRag(
     chunkIndex: Number(h.payload?.chunkIndex ?? 0),
     text: String(h.payload?.text ?? h.payload?.caption ?? ""),
     score: h.score,
+    timestampSeconds: typeof h.payload?.timestampSeconds === "number" ? h.payload.timestampSeconds : null,
   }))
 
   const textCheck = noteHits.length >= 3

@@ -37,6 +37,15 @@ export interface RagCitation {
   cloudinaryUrl?: string | null;
   chunkIndex: number;
   score?: number;
+  // 1-based citation number as it appears in the answer text (e.g. the "2"
+  // in "[2]") — only sources actually cited in the answer are included, so
+  // this is not necessarily contiguous or equal to the array position.
+  index?: number;
+  // Human-readable modality label, e.g. "Note source", "Image source",
+  // "Video frame source (at 0:42)".
+  label?: string;
+  // Only set for modality "video_frame".
+  timestampSeconds?: number | null;
 }
 
 export interface RagAskResponse {

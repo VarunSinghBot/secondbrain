@@ -120,13 +120,25 @@ async function claimNextQueuedJob(): Promise<JobRecord | null> {
 
 let workerStarted = false
 
+// How often to check for new jobs when the queue is empty. Draining stays
+// immediate (setImmediate below) — this only paces the idle-poll, so it's
+// not busy-spinning claimNextQueuedJob()'s file I/O when there's nothing to do.
+const POLL_INTERVAL_MS = 1000
+
 export async function startWorker(): Promise<void> {
   if (workerStarted) return
   workerStarted = true
 
   async function loop() {
     const next = await claimNextQueuedJob()
-    if (!next) return
+    if (!next) {
+      // No job right now — poll again shortly instead of stopping for good.
+      // Without this, the loop exits the moment the queue first drains (e.g.
+      // at startup with nothing queued yet) and never picks up anything
+      // addJob() enqueues afterward — every job just sits "queued" forever.
+      setTimeout(loop, POLL_INTERVAL_MS)
+      return
+    }
 
     // processingLock ensures only one indexContent() call is ever in
     // flight, even if something in the future kicks off a second loop.

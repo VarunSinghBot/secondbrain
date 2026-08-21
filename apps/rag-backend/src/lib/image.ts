@@ -3,6 +3,7 @@ import { ClipSidecarUnavailableError, embedImage, tagImage } from "./clip-client
 import { embedText } from "./embeddings"
 import { uploadToCloudinary } from "./cloudinary"
 import { upsertChunk, upsertImageVector } from "./qdrant"
+import { joinNaturally } from "./text"
 import { randomUUID } from "node:crypto"
 
 export async function extractOcrText(buffer: Buffer, fileName = "image.png"): Promise<string> {
@@ -87,7 +88,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
     try {
       ;[clipVector, tags] = await Promise.all([
         embedImage(buffer, mimeType),
-        tagImage(buffer, mimeType, 0.18, 8).catch(() => []),
+        tagImage(buffer, mimeType).catch(() => []),
       ])
     } catch (err) {
       // Re-thrown as the same typed error (not wrapped in a generic Error)
@@ -99,9 +100,14 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
       throw err
     }
 
-    const caption = tags.length ? `Image containing: ${tags.join(", ")}` : "Uploaded image"
-    const titlePart = sourceName ? `Title: ${sourceName}. ` : ""
-    const tagText = `${titlePart}Image: ${fileName}. Tags: ${tags.join(", ") || "none"}.${cloudinaryUrl ? ` Cloudinary: ${cloudinaryUrl}` : ""}`
+    // A flowing sentence, not a labeled field dump — this is what gets
+    // embedded and later shown to the LLM as retrieved context, and the
+    // model tends to mirror the shape of what it's given.
+    const titledAs = sourceName ? ` titled "${sourceName}"` : ""
+    const caption = tags.length
+      ? `A photo${titledAs} showing ${joinNaturally(tags)}.`
+      : `An uploaded photo${titledAs} with no clearly recognizable subject.`
+    const tagText = caption
 
     // Upsert 512-dim CLIP vector to rag_images
     const imgPointId = randomUUID()

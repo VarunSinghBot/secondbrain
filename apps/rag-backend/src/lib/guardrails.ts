@@ -14,6 +14,9 @@ export interface RAGSourceContext {
   caption?: string
   text: string
   score: number
+  // Set for modality "video_frame" once Task 4 lands — where in the source
+  // video (in seconds) this frame was sampled from.
+  timestampSeconds?: number | null
 }
 
 export interface GuardrailValidationResult {
@@ -95,7 +98,11 @@ export function buildGroundedSystemPrompt(sources: RAGSourceContext[] = []): str
     "Answer the user's question using ONLY the provided context snippets.",
     "If the context is insufficient or missing, state clearly: 'I could not find sufficient context in your knowledge base to answer this question accurately.' — do not hallucinate.",
     "Cite the source index like [1], [2] when you use a context snippet.",
-    "If a Cloudinary URL is provided in the source metadata, mention it so the user can inspect the original media file.",
+    "Do not paste raw URLs into your answer — the source link is already shown to the user separately via the citation.",
+    "",
+    "Answer in plain conversational prose, as if speaking to the user directly.",
+    "Synthesize the retrieved snippets into a natural answer — do not restate them field by field (e.g. do not write 'Title: ... Content: ... Tags: ...').",
+    "Do not use markdown headers or bold text unless the user's question itself asks for a structured list or comparison.",
     "",
     `CONTEXT:\n${contextStr}`,
   ].join("\n")
@@ -103,6 +110,52 @@ export function buildGroundedSystemPrompt(sources: RAGSourceContext[] = []): str
 
 function roundScore(score: number): number {
   return Math.round(score * 10000) / 10000
+}
+
+/**
+ * Parses which [n] citation markers the model actually used in its answer.
+ * Sources are numbered 1-based in the same order buildGroundedSystemPrompt
+ * assigned them, so this must be checked against that same source array.
+ *
+ * openai/gpt-oss-120b doesn't reliably stick to the plain "[1]" ASCII style
+ * the prompt asks for — observed in practice: "[1]", full-width "【1】", and
+ * "【1†L1-L2】" (extra annotation text before the closing bracket). Rather
+ * than chase each new variant as it surfaces (this is the third), this
+ * matches any digit run immediately after an opening bracket, ASCII or
+ * full-width, regardless of what comes before the closing bracket.
+ */
+export function citedSourceIndices(answer: string): Set<number> {
+  const indices = new Set<number>()
+  const pattern = /[\[【](\d+)[^\]】]*[\]】]/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(answer))) {
+    indices.add(Number(match[1]))
+  }
+  return indices
+}
+
+function formatTimestamp(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = Math.floor(totalSeconds % 60)
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
+
+/**
+ * Human-readable modality label for a cited source, e.g. "Video frame
+ * source (at 0:42)" — the timestamp only appears once Task 4 populates
+ * timestampSeconds on video_frame sources.
+ */
+export function labelForSource(source: RAGSourceContext): string {
+  const modality = (source.modality || source.sourceType || "text").toLowerCase()
+
+  if (modality === "video_frame") {
+    const ts = typeof source.timestampSeconds === "number" ? ` (at ${formatTimestamp(source.timestampSeconds)})` : ""
+    return `Video frame source${ts}`
+  }
+  if (modality === "image") return "Image source"
+  if (modality === "audio") return "Audio source"
+  if (modality === "video") return "Video source"
+  return "Note source"
 }
 
 export function enforceGroundingGuardrail(

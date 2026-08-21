@@ -14,6 +14,9 @@ export interface QdrantPayload {
   chunkIndex: number
   text: string
   metadata?: Record<string, unknown> | null
+  // Only set for modality "video_frame" — where in the source video (in
+  // seconds) this frame was sampled from.
+  timestampSeconds?: number | null
 }
 
 export async function qdrantRequest(path: string, init?: RequestInit): Promise<Response> {

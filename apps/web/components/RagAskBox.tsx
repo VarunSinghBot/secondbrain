@@ -133,6 +133,12 @@ export default function RagAskBox() {
             <p className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>Sources</p>
             <div className="flex flex-col gap-2">
               {citations.map((citation, index) => {
+                // citation.index is the real 1-based number the answer text
+                // cites this source by (e.g. the "2" in "[2]") — not
+                // necessarily contiguous, since only cited sources are
+                // returned at all. Falling back to array position only
+                // covers a citation that somehow arrives without one.
+                const displayIndex = citation.index ?? index + 1
                 const displayTitle = citation.sourceTitle || citation.title || citation.contentId
                 const displayModality = citation.modality || citation.sourceType || "text"
                 const emojis: Record<string, string> = {
@@ -153,7 +159,7 @@ export default function RagAskBox() {
                     style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
                   >
                     <div>
-                      <strong style={{ color: "var(--text-primary)" }}>[{index + 1}]</strong> {displayTitle}
+                      <strong style={{ color: "var(--text-primary)" }}>[{displayIndex}]</strong> {displayTitle}
                     </div>
                     <span 
                       className="text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border"

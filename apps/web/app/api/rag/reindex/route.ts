@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
 
   const ragResponse = await fetch(`${ragBackendUrl.replace(/\/$/, "")}/reindex`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-internal-secret": process.env.RAG_INTERNAL_SECRET ?? "",
+    },
     body: JSON.stringify(batchRequest),
   })
 
