@@ -1,5 +1,7 @@
 "use client"
 
+import { X, Plus } from "lucide-react"
+
 export default function TagInput({
   tags,
   tagInput,
@@ -28,8 +30,10 @@ export default function TagInput({
           <span key={tag} className="flex items-center gap-1 text-sm px-3 py-1 rounded-full border"
                 style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}>
             #{tag}
-            <button onClick={() => onRemoveTag(tag)}
-                    className="ml-1 text-xs hover:text-red-500 transition-colors">✕</button>
+            <button onClick={() => onRemoveTag(tag)} aria-label={`Remove tag ${tag}`}
+                    className="ml-1 hover:text-red-500 transition-colors">
+              <X className="w-3 h-3" strokeWidth={2.5} />
+            </button>
           </span>
         ))}
       </div>
@@ -64,8 +68,9 @@ export default function TagInput({
                onChange={(e) => onTagInputChange(e.target.value)}
                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), onAddTag())} />
         <button onClick={onAddTag}
-                className="px-4 h-9 rounded-lg text-sm font-medium text-white transition-all"
+                className="px-4 h-9 rounded-lg text-sm font-medium text-white transition-all flex items-center gap-1"
                 style={{ background: "var(--accent)" }}>
+          <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
           Add
         </button>
       </div>

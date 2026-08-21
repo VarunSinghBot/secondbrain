@@ -6,6 +6,8 @@ import type { RootState } from "@/store/store"
 import SideBar from "@/components/SideBar"
 import { useSession } from "next-auth/react"
 import toast, { Toaster } from "react-hot-toast"
+import { Camera, Check, Grid3x3, Columns3, Columns2 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 const THEMES = [
   { id: "light",  label: "Light",  bg: "#ffffff", accent: "#e1434b", text: "#1a1a1a", desc: "Clean white" },
@@ -14,11 +16,11 @@ const THEMES = [
   { id: "ocean",  label: "Ocean",  bg: "#f0f4f8", accent: "#2563eb", text: "#1a2f4a", desc: "Cool & calm" },
 ] as const
 
-const LAYOUTS = [
-  { id: "compact",     label: "Compact",     desc: "4 columns, dense view",  icon: "⊞" },
-  { id: "comfortable", label: "Comfortable", desc: "3 columns, balanced",    icon: "⊟" },
-  { id: "spacious",    label: "Spacious",    desc: "2 columns, wide cards",  icon: "⊡" },
-] as const
+const LAYOUTS: { id: "compact" | "comfortable" | "spacious"; label: string; desc: string; icon: LucideIcon }[] = [
+  { id: "compact",     label: "Compact",     desc: "4 columns, dense view",  icon: Grid3x3 },
+  { id: "comfortable", label: "Comfortable", desc: "3 columns, balanced",    icon: Columns3 },
+  { id: "spacious",    label: "Spacious",    desc: "2 columns, wide cards",  icon: Columns2 },
+]
 
 export default function SettingsPage() {
   const dispatch = useDispatch()
@@ -85,7 +87,7 @@ export default function SettingsPage() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden transition-colors duration-300" style={{ background: "var(--bg-primary)" }}>
-      <div className="w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <Toaster position="bottom-right" reverseOrder />
 
       <div className="flex-1 overflow-y-auto page-enter">
@@ -120,7 +122,8 @@ export default function SettingsPage() {
 
                 <div>
                   <label className="cursor-pointer px-4 py-2 text-xs font-semibold rounded-lg text-white transition-all hover:opacity-90 inline-flex items-center gap-2" style={{ background: "var(--accent)" }}>
-                    {uploadingAvatar ? "Uploading..." : "📷 Upload Avatar"}
+                    <Camera className="w-3.5 h-3.5" strokeWidth={2} />
+                    {uploadingAvatar ? "Uploading..." : "Upload Avatar"}
                     <input
                       type="file"
                       accept="image/*"
@@ -152,7 +155,9 @@ export default function SettingsPage() {
                   }}
                 >
                   {theme === t.id && (
-                    <span className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: t.accent }}>✓</span>
+                    <span className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white" style={{ background: t.accent }}>
+                      <Check className="w-3 h-3" strokeWidth={3} />
+                    </span>
                   )}
                   {/* Mini preview */}
                   <div className="flex gap-1 mb-3">
@@ -182,13 +187,15 @@ export default function SettingsPage() {
                     borderColor: layout === l.id ? "var(--accent)" : "var(--border)",
                   }}
                 >
-                  <span className="text-2xl">{l.icon}</span>
+                  <l.icon className="w-6 h-6 flex-shrink-0" style={{ color: "var(--text-secondary)" }} strokeWidth={1.75} />
                   <div className="flex-1">
                     <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>{l.label}</p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>{l.desc}</p>
                   </div>
                   {layout === l.id && (
-                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: "var(--accent)" }}>✓</span>
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "var(--accent)" }}>
+                      <Check className="w-3 h-3" strokeWidth={3} />
+                    </span>
                   )}
                 </button>
               ))}

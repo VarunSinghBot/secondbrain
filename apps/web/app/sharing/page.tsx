@@ -4,15 +4,21 @@ import { useRouter } from "next/navigation"
 import { useSelector } from "react-redux"
 import type { RootState } from "@/store/store"
 import SideBar from "@/components/SideBar"
+import LoadingScreen from "@/components/LoadingScreen"
 import type { ContentItem } from "@secondbrain/types"
 import toast, { Toaster } from "react-hot-toast"
+import {
+  FileText, Image as ImageIcon, Music, Video, Link2, Copy, Clock,
+  X, RotateCcw, Trash2, Calendar, SlidersHorizontal,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 interface SharedNote extends ContentItem {
   shareLink: string | null
   isExpired: boolean
 }
 
-const TYPE_ICON:  Record<string, string> = { article: "📄", image: "🖼", audio: "🎵", video: "🎬" }
+const TYPE_ICON:  Record<string, LucideIcon> = { article: FileText, image: ImageIcon, audio: Music, video: Video }
 const TYPE_COLOR: Record<string, string> = { article: "#6366f1", image: "#ec4899", audio: "#f59e0b", video: "#10b981" }
 
 function timeRemaining(expiresAt: string | Date | null | undefined): string {
@@ -99,7 +105,7 @@ export default function SharingDashboard() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden transition-colors duration-300" style={{ background: "var(--bg-primary)" }}>
-      <div className="w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <Toaster position="bottom-right" reverseOrder />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -112,13 +118,10 @@ export default function SharingDashboard() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="flex items-center justify-center h-64 gap-3">
-              <div className="w-10 h-10 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }} />
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading shared notes...</p>
-            </div>
+            <LoadingScreen label="Loading shared notes..." fullScreen={false} />
           ) : notes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3 opacity-50">
-              <span className="text-5xl">📤</span>
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
+              <Link2 className="w-12 h-12 opacity-40" style={{ color: "var(--text-muted)" }} strokeWidth={1.5} />
               <p className="text-lg font-medium" style={{ color: "var(--text-secondary)" }}>No shared notes yet</p>
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>When you enable sharing on a note, it will appear here</p>
             </div>
@@ -134,7 +137,7 @@ export default function SharingDashboard() {
                   <div className={`grid ${gridCols} gap-4`}>
                     {activeNotes.map((note) => {
                       const color = TYPE_COLOR[note.type] ?? "#e1434b"
-                      const icon  = TYPE_ICON[note.type]  ?? "📝"
+                      const TypeIcon = TYPE_ICON[note.type]  ?? FileText
                       const remaining = timeRemaining(note.shareExpiresAt)
 
                       return (
@@ -142,15 +145,17 @@ export default function SharingDashboard() {
                           <div className="h-1.5 w-full flex-shrink-0" style={{ background: color }} />
                           <div className="p-4 flex-1 flex flex-col">
                             <div className="flex items-center gap-2 mb-2">
-                              <span>{icon}</span>
+                              <TypeIcon className="w-3.5 h-3.5" style={{ color }} strokeWidth={2.25} />
                               <span className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full text-white" style={{ background: color }}>{note.type}</span>
-                              <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}>● Live</span>
+                              <span className="ml-auto flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-current" /> Live
+                              </span>
                             </div>
                             <h3 className="text-sm font-semibold mb-1 line-clamp-2 cursor-pointer hover:underline" style={{ color: "var(--text-primary)" }} onClick={() => router.push(`/note/${note.id}`)}>{note.title}</h3>
 
                             {/* Expiry countdown */}
                             <div className="flex items-center gap-1.5 mt-2 mb-3">
-                              <svg className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--text-muted)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                              <Clock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--text-muted)" }} strokeWidth={2} />
                               <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{remaining}</span>
                             </div>
 
@@ -158,17 +163,19 @@ export default function SharingDashboard() {
                             {note.shareLink && (
                               <div className="flex items-center gap-1.5 mb-3">
                                 <input type="text" readOnly value={note.shareLink} className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border truncate focus:outline-none" style={{ background: "var(--input-bg)", borderColor: "var(--border)", color: "var(--text-secondary)" }} />
-                                <button onClick={() => copyLink(note.shareLink!)} className="flex-shrink-0 px-2.5 py-1.5 text-xs text-white rounded-lg font-medium hover:opacity-90 transition-opacity" style={{ background: "#6366f1" }} title="Copy link">📋</button>
+                                <button onClick={() => copyLink(note.shareLink!)} className="flex-shrink-0 p-1.5 text-white rounded-lg hover:opacity-90 transition-opacity" style={{ background: "#6366f1" }} title="Copy link" aria-label="Copy link">
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             )}
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 mt-auto">
-                              <button onClick={() => { setExtendId(note.id); setExtendDuration("1d"); setExtendDays(7) }} className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all hover:opacity-80" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
-                                ⏳ Extend
+                              <button onClick={() => { setExtendId(note.id); setExtendDuration("1d"); setExtendDays(7) }} className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all hover:opacity-80 flex items-center justify-center gap-1.5" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
+                                <Clock className="w-3.5 h-3.5" /> Extend
                               </button>
-                              <button onClick={() => disableShare(note.id)} className="flex-1 py-1.5 text-xs font-medium text-white rounded-lg transition-all hover:opacity-90" style={{ background: "#ef4444" }}>
-                                ✕ Turn Off
+                              <button onClick={() => disableShare(note.id)} className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all hover:opacity-80 flex items-center justify-center gap-1.5" style={{ borderColor: "#ef4444", color: "#ef4444" }}>
+                                <X className="w-3.5 h-3.5" /> Turn Off
                               </button>
                             </div>
                           </div>
@@ -189,24 +196,24 @@ export default function SharingDashboard() {
                   <div className={`grid ${gridCols} gap-4`}>
                     {expiredNotes.map((note) => {
                       const color = TYPE_COLOR[note.type] ?? "#e1434b"
-                      const icon  = TYPE_ICON[note.type]  ?? "📝"
+                      const TypeIcon = TYPE_ICON[note.type]  ?? FileText
 
                       return (
                         <div key={note.id} className="rounded-xl border overflow-hidden flex flex-col opacity-60" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
                           <div className="h-1.5 w-full flex-shrink-0" style={{ background: color, opacity: 0.4 }} />
                           <div className="p-4 flex-1 flex flex-col">
                             <div className="flex items-center gap-2 mb-2">
-                              <span>{icon}</span>
+                              <TypeIcon className="w-3.5 h-3.5" style={{ color }} strokeWidth={2.25} />
                               <span className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full text-white" style={{ background: color, opacity: 0.6 }}>{note.type}</span>
                               <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(156,163,175,0.15)", color: "#9ca3af" }}>Expired</span>
                             </div>
                             <h3 className="text-sm font-semibold mb-3 line-clamp-2 cursor-pointer hover:underline" style={{ color: "var(--text-primary)" }} onClick={() => router.push(`/note/${note.id}`)}>{note.title}</h3>
                             <div className="flex items-center gap-2 mt-auto">
-                              <button onClick={() => { setExtendId(note.id); setExtendDuration("1d"); setExtendDays(7) }} className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all hover:opacity-80" style={{ borderColor: "#22c55e", color: "#22c55e" }}>
-                                🔄 Re-enable
+                              <button onClick={() => { setExtendId(note.id); setExtendDuration("1d"); setExtendDays(7) }} className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all hover:opacity-80 flex items-center justify-center gap-1.5" style={{ borderColor: "#22c55e", color: "#22c55e" }}>
+                                <RotateCcw className="w-3.5 h-3.5" /> Re-enable
                               </button>
-                              <button onClick={() => disableShare(note.id)} className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all hover:opacity-80" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-                                🗑 Remove
+                              <button onClick={() => disableShare(note.id)} className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all hover:opacity-80 flex items-center justify-center gap-1.5" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+                                <Trash2 className="w-3.5 h-3.5" /> Remove
                               </button>
                             </div>
                           </div>
@@ -229,7 +236,7 @@ export default function SharingDashboard() {
             <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>Choose a new duration for this share link</p>
 
             <div className="flex flex-col gap-2 mb-5">
-              {([["1h", "1 Hour"], ["1d", "1 Day"], ["custom", "Custom"]] as const).map(([val, label]) => (
+              {([["1h", "1 Hour", Clock], ["1d", "1 Day", Calendar], ["custom", "Custom", SlidersHorizontal]] as const).map(([val, label, Icon]) => (
                 <button
                   key={val}
                   onClick={() => setExtendDuration(val)}
@@ -240,7 +247,7 @@ export default function SharingDashboard() {
                     color:       extendDuration === val ? "#fff" : "var(--text-primary)",
                   }}
                 >
-                  <span>{val === "1h" ? "⏰" : val === "1d" ? "📅" : "🔧"}</span>
+                  <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
                   {label}
                 </button>
               ))}

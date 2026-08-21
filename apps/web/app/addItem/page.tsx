@@ -26,34 +26,6 @@ export default function AddItemPage() {
   const [wordCount, setWordCount] = useState(0)
   const [activeMediaTool, setActiveMediaTool] = useState<MediaTool | null>(null)
   const [mediaInput, setMediaInput] = useState("")
-  const [suggestedTags, setSuggestedTags] = useState<string[]>([])
-
-  const fetchSuggestedTags = useCallback(async (imgUrl?: string, itemTitle?: string, itemType?: string) => {
-    try {
-      const res = await fetch("/api/tags/suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageUrl: imgUrl,
-          title: itemTitle ?? title,
-          body: bodyRef.current?.innerText,
-          type: itemType ?? type,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok && Array.isArray(data.suggestions)) {
-        setSuggestedTags(data.suggestions)
-      }
-    } catch {}
-  }, [title, type])
-
-  useEffect(() => {
-    if (type === "image") {
-      fetchSuggestedTags(undefined, title, type)
-    } else {
-      setSuggestedTags([])
-    }
-  }, [type, title, fetchSuggestedTags])
 
   const bodyRef = useRef<HTMLDivElement>(null)
   const mediaInputRef = useRef<HTMLInputElement>(null)
@@ -140,11 +112,6 @@ export default function AddItemPage() {
     if (!html) return
 
     insertHtmlAtCursor(html)
-    if (activeMediaTool === "image" || type === "image") {
-      fetchSuggestedTags(mediaInput, title, activeMediaTool)
-    } else {
-      setSuggestedTags([])
-    }
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
@@ -154,15 +121,10 @@ export default function AddItemPage() {
     const html = buildMediaHtml(tool, url)
     if (!html) return
     insertHtmlAtCursor(html)
-    if (tool === "image" || type === "image") {
-      fetchSuggestedTags(url, title, tool)
-    } else {
-      setSuggestedTags([])
-    }
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
-  }, [fetchSuggestedTags, insertHtmlAtCursor, title, type])
+  }, [insertHtmlAtCursor])
 
   const format = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value)
@@ -222,7 +184,7 @@ export default function AddItemPage() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden" style={{ background: "var(--bg-primary)" }}>
-      <div className="w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <Toaster position="bottom-right" reverseOrder />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -305,13 +267,9 @@ export default function AddItemPage() {
             <TagInput
               tags={tags}
               tagInput={tagInput}
-              suggestedTags={suggestedTags}
               onTagInputChange={setTagInput}
               onAddTag={addTag}
               onRemoveTag={removeTag}
-              onAddSuggestedTag={(st) => {
-                if (!tags.includes(st)) setTags((p) => [...p, st])
-              }}
             />
 
             {error && <p className="mt-4 text-red-500 text-sm">{error}</p>}

@@ -3,12 +3,14 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
 import toast, { Toaster } from "react-hot-toast"
+import { Brain, Eye, EyeOff, Loader2 } from "lucide-react"
 
 export default function SignupPage() {
   const [username, setUsername] = useState("")
   const [email,    setEmail]    = useState("")
   const [pw,       setPw]       = useState("")
   const [rePw,     setRePw]     = useState("")
+  const [showPw,   setShowPw]   = useState(false)
   const [error,    setError]    = useState("")
   const [loading,  setLoading]  = useState(false)
   const router = useRouter()
@@ -31,29 +33,109 @@ export default function SignupPage() {
   return (
     <>
       <Toaster position="bottom-right" reverseOrder />
-      <div className="w-full min-h-[560px] text-black/75 rounded-xl bg-white/40 backdrop-blur border border-white/30 shadow-xl flex flex-col items-center justify-start py-8 px-6 transition-all duration-300">
-        <h1 className="text-[#e1434b] text-4xl font-bold mb-5">Sign Up</h1>
-        <button onClick={googleLogin} className="w-[88%] h-[44px] flex items-center justify-center gap-3 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg mb-4 text-gray-700 font-medium shadow-sm transition-all duration-200 hover:shadow-md">
-          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      <div className="w-full max-w-sm rounded-2xl p-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+        {/* Mobile brand mark — the layout's brand panel is hidden below lg */}
+        <div className="flex lg:hidden items-center gap-2 mb-6">
+          <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "var(--accent)" }}>
+            <Brain className="w-5 h-5 text-white" strokeWidth={2} />
+          </div>
+          <span className="font-bold" style={{ color: "var(--accent)" }}>Second Brain</span>
+        </div>
+
+        <h2 className="text-2xl font-bold mb-6" style={{ color: "var(--text-primary)" }}>Create your account</h2>
+
+        <button
+          onClick={googleLogin}
+          className="w-full h-11 flex items-center justify-center gap-3 rounded-lg font-medium mb-4 transition-all duration-200 hover:shadow-md"
+          style={{ background: "#ffffff", border: "1px solid var(--border)", color: "#3c4043" }}
+        >
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
           Continue with Google
         </button>
-        <div className="w-[88%] flex items-center gap-3 mb-4"><div className="flex-1 h-px bg-gray-200"/><span className="text-gray-400 text-sm">or</span><div className="flex-1 h-px bg-gray-200"/></div>
-        {[
-          { label: "Username", val: username, set: setUsername, type: "text",     ph: "Your name" },
-          { label: "Email",    val: email,    set: setEmail,    type: "email",    ph: "you@example.com" },
-          { label: "Password", val: pw,       set: setPw,       type: "password", ph: "••••••••" },
-          { label: "Confirm",  val: rePw,     set: setRePw,     type: "password", ph: "••••••••" },
-        ].map(({ label, val, set, type, ph }) => (
-          <label key={label} className="w-[88%] flex flex-col text-base font-medium mb-3">
-            {label}
-            <input type={type} className="mt-1 w-full rounded-lg p-2.5 border border-gray-200 bg-white/70 focus:border-[#e1434b] focus:outline-none transition-colors" placeholder={ph} value={val} onChange={(e) => set(e.target.value)} />
+
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>or</span>
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+        </div>
+
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+            Username
+            <input
+              type="text"
+              className="h-10 px-3 rounded-lg text-sm focus:outline-none focus:ring-2 transition-all"
+              style={{ background: "var(--input-bg)", border: "1px solid var(--border)", color: "var(--text-primary)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
+              placeholder="Your name"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
           </label>
-        ))}
-        {error && <p className="w-[88%] text-red-500 text-sm">{error}</p>}
-        <button disabled={loading} onClick={submit} className="w-[88%] h-[44px] bg-[#e1434b] hover:bg-[#c73038] disabled:opacity-60 text-white rounded-lg mt-3 font-semibold transition-all duration-200 hover:shadow-lg">
-          {loading ? "Creating..." : "Create Account"}
-        </button>
-        <p className="text-sm mt-4 text-gray-500">Have an account? <a href="/login" className="text-[#e1434b] font-medium hover:underline">Login</a></p>
+
+          <label className="flex flex-col gap-1.5 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+            Email
+            <input
+              type="email"
+              className="h-10 px-3 rounded-lg text-sm focus:outline-none focus:ring-2 transition-all"
+              style={{ background: "var(--input-bg)", border: "1px solid var(--border)", color: "var(--text-primary)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm font-medium relative" style={{ color: "var(--text-secondary)" }}>
+            Password
+            <input
+              type={showPw ? "text" : "password"}
+              className="h-10 px-3 pr-10 rounded-lg text-sm focus:outline-none focus:ring-2 transition-all"
+              style={{ background: "var(--input-bg)", border: "1px solid var(--border)", color: "var(--text-primary)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
+              placeholder="••••••••"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-[34px] transition-colors hover:opacity-70"
+              style={{ color: "var(--text-muted)" }}
+              onClick={() => setShowPw((p) => !p)}
+              aria-label={showPw ? "Hide password" : "Show password"}
+            >
+              {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+            Confirm password
+            <input
+              type={showPw ? "text" : "password"}
+              className="h-10 px-3 rounded-lg text-sm focus:outline-none focus:ring-2 transition-all"
+              style={{ background: "var(--input-bg)", border: "1px solid var(--border)", color: "var(--text-primary)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
+              placeholder="••••••••"
+              value={rePw}
+              onChange={(e) => setRePw(e.target.value)}
+              required
+            />
+          </label>
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="h-11 rounded-lg font-semibold text-white mt-1 transition-all duration-200 hover:shadow-lg disabled:opacity-60 flex items-center justify-center gap-2"
+            style={{ background: "var(--accent)" }}
+          >
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</> : "Create Account"}
+          </button>
+        </form>
+
+        <p className="text-sm mt-5 text-center" style={{ color: "var(--text-muted)" }}>
+          Have an account? <a href="/login" className="font-medium hover:underline" style={{ color: "var(--accent)" }}>Login</a>
+        </p>
       </div>
     </>
   )

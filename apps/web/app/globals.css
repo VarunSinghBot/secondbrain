@@ -21,10 +21,10 @@
 }
 
 .theme-dark {
-  --bg-primary:   #0f0f0f;
+  --bg-primary:   #121214;
   --bg-secondary: #1a1a1a;
   --bg-card:      #1c1c1c;
-  --bg-sidebar:   #111111;
+  --bg-sidebar:   #131316;
   --text-primary: #f0f0f0;
   --text-secondary: #aaaaaa;
   --text-muted:   #666666;
@@ -77,11 +77,6 @@ body {
 
 .page-enter { animation: fadeIn 0.25s ease forwards; }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
 /* ── Editor styles ── */
 .editor-body:empty::before {
   content: attr(data-placeholder);
@@ -100,4 +95,23 @@ body {
   referrer-policy: no-referrer;
 }
 
+/* Themed scrollbar (replaces default OS scrollbar) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+/* Soft ambient glow behind content, not a background image */
+.ambient-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(600px circle at 10% 10%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 60%),
+    radial-gradient(500px circle at 90% 85%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 60%);
+}

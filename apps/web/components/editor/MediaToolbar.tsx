@@ -3,11 +3,14 @@
 import { useState, useRef, type RefObject } from "react"
 import type { MediaTool } from "@/lib/editor"
 import toast from "react-hot-toast"
+import { Image as ImageIcon, Music, Video, FolderOpen, Link2, UploadCloud, Loader2 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 type MediaToolbarButton = {
   tool: MediaTool
   label: string
   accept: string
+  icon: LucideIcon
 }
 
 export default function MediaToolbar({
@@ -32,9 +35,9 @@ export default function MediaToolbar({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const mediaButtons: MediaToolbarButton[] = [
-    { tool: "image", label: "🖼 Image", accept: "image/*" },
-    { tool: "audio", label: "🎵 Audio", accept: "audio/*" },
-    { tool: "video", label: "🎬 Video", accept: "video/*" },
+    { tool: "image", label: "Image", accept: "image/*", icon: ImageIcon },
+    { tool: "audio", label: "Audio", accept: "audio/*", icon: Music },
+    { tool: "video", label: "Video", accept: "video/*", icon: Video },
   ]
 
   const currentButton = mediaButtons.find((b) => b.tool === activeMediaTool)
@@ -76,19 +79,20 @@ export default function MediaToolbar({
 
   return (
     <>
-      {mediaButtons.map(({ tool, label }) => (
+      {mediaButtons.map(({ tool, label, icon: Icon }) => (
         <div key={tool} className="relative">
           <button
             onMouseDown={(e) => {
               e.preventDefault()
               onOpenTool(tool)
             }}
-            className="px-3 h-8 rounded text-xs transition-all hover:opacity-70 font-medium"
+            className="px-3 h-8 rounded text-xs transition-all hover:opacity-70 font-medium flex items-center gap-1.5"
             style={{
               color: "var(--text-primary)",
               background: activeMediaTool === tool ? "var(--accent)" : "var(--input-bg)",
             }}
           >
+            <Icon className="w-3.5 h-3.5" strokeWidth={2} />
             {label}
           </button>
 
@@ -102,22 +106,22 @@ export default function MediaToolbar({
                 <button
                   type="button"
                   onClick={() => setTab("file")}
-                  className={`flex-1 py-1.5 text-xs font-semibold border-b-2 transition-all ${
-                    tab === "file" ? "border-red-500 text-red-500" : "border-transparent text-gray-400"
+                  className={`flex-1 py-1.5 text-xs font-semibold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                    tab === "file" ? "border-red-500" : "border-transparent text-gray-400"
                   }`}
                   style={{ color: tab === "file" ? "var(--accent)" : "var(--text-muted)" }}
                 >
-                  📁 Upload File
+                  <FolderOpen className="w-3.5 h-3.5" /> Upload File
                 </button>
                 <button
                   type="button"
                   onClick={() => setTab("url")}
-                  className={`flex-1 py-1.5 text-xs font-semibold border-b-2 transition-all ${
-                    tab === "url" ? "border-red-500 text-red-500" : "border-transparent text-gray-400"
+                  className={`flex-1 py-1.5 text-xs font-semibold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                    tab === "url" ? "border-red-500" : "border-transparent text-gray-400"
                   }`}
                   style={{ color: tab === "url" ? "var(--accent)" : "var(--text-muted)" }}
                 >
-                  🔗 Paste URL
+                  <Link2 className="w-3.5 h-3.5" /> Paste URL
                 </button>
               </div>
 
@@ -135,11 +139,11 @@ export default function MediaToolbar({
                   >
                     {uploading ? (
                       <div className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--accent)" }}>
-                        <span className="animate-spin text-sm">⏳</span> Uploading...
+                        <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center pt-2 pb-2">
-                        <span className="text-xl mb-1">☁️</span>
+                        <UploadCloud className="w-5 h-5 mb-1" style={{ color: "var(--text-muted)" }} strokeWidth={1.75} />
                         <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
                           Click to browse file
                         </p>
@@ -161,7 +165,7 @@ export default function MediaToolbar({
               ) : (
                 <div>
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
-                    Paste {label.split(" ")[1].toLowerCase()} URL
+                    Paste {currentButton?.label.toLowerCase()} URL
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -201,4 +205,3 @@ export default function MediaToolbar({
     </>
   )
 }
-

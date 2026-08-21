@@ -5,6 +5,10 @@ import SideBar from "@/components/SideBar"
 import type { ContentItem } from "@secondbrain/types"
 import { getYouTubeEmbedUrl } from "@/lib/media"
 import toast, { Toaster } from "react-hot-toast"
+import {
+  ArrowLeft, Share2, Copy, AlertCircle, Clock, Calendar,
+  SlidersHorizontal, X,
+} from "lucide-react"
 
 const TYPE_COLOR: Record<string, string> = {
   article: "#6366f1", image: "#ec4899", audio: "#f59e0b", video: "#10b981",
@@ -126,14 +130,18 @@ export default function NoteDetailClient({ note, userId }: { note: ContentItem &
   return (
     <div className="h-dvh w-dvw flex overflow-hidden" style={{ background: "var(--bg-primary)" }}>
       <Toaster position="bottom-right" reverseOrder />
-      <div className="w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <div className="flex-1 overflow-y-auto page-enter">
 
         {/* Top bar */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-8 py-3 border-b backdrop-blur-sm" style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}>
-          <button onClick={() => router.push("/main")} className="text-sm font-medium hover:opacity-70 transition-opacity" style={{ color: "var(--text-secondary)" }}>← Back</button>
+          <button onClick={() => router.push("/main")} className="flex items-center gap-1.5 text-sm font-medium hover:opacity-70 transition-opacity" style={{ color: "var(--text-secondary)" }}>
+            <ArrowLeft className="w-4 h-4" strokeWidth={2} /> Back
+          </button>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowShare((p) => !p)} className="px-4 py-1.5 text-sm font-medium rounded-full border transition-all hover:shadow" style={{ borderColor: "#6366f1", color: "#6366f1" }}>🔗 Share</button>
+            <button onClick={() => setShowShare((p) => !p)} className="px-4 py-1.5 text-sm font-medium rounded-full border transition-all hover:shadow flex items-center gap-1.5" style={{ borderColor: "#6366f1", color: "#6366f1" }}>
+              <Share2 className="w-3.5 h-3.5" /> Share
+            </button>
             <button onClick={() => router.push(`/addItem?id=${note.id}`)} className="px-4 py-1.5 text-sm font-medium rounded-full border transition-all hover:shadow" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Edit</button>
             <button onClick={() => setDelWarn(true)} className="px-4 py-1.5 text-sm font-medium text-white rounded-full transition-all hover:shadow" style={{ background: "#ef4444" }}>Delete</button>
           </div>
@@ -170,16 +178,18 @@ export default function NoteDetailClient({ note, userId }: { note: ContentItem &
                   />
                   <button
                     onClick={copyShareLink}
-                    className="px-3 py-2 text-xs font-medium text-white rounded-lg transition-opacity hover:opacity-90 flex-shrink-0"
+                    className="px-3 py-2 text-xs font-medium text-white rounded-lg transition-opacity hover:opacity-90 flex-shrink-0 flex items-center gap-1.5"
                     style={{ background: "#6366f1" }}
                   >
-                    📋 Copy Link
+                    <Copy className="w-3.5 h-3.5" /> Copy Link
                   </button>
                 </div>
 
                 <div className="flex items-center justify-between text-xs px-1">
-                  <span style={{ color: "var(--text-muted)" }}>
-                    {isExpired ? "🔴 Link Expired" : "⏳ Expires:"} {shareExpiresAt ? new Date(shareExpiresAt).toLocaleString("en-GB") : "No expiry"}
+                  <span className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+                    {isExpired
+                      ? <><AlertCircle className="w-3.5 h-3.5 text-red-500" /> Link Expired</>
+                      : <><Clock className="w-3.5 h-3.5" /> Expires:</>} {shareExpiresAt ? new Date(shareExpiresAt).toLocaleString("en-GB") : "No expiry"}
                   </span>
                 </div>
               </div>
@@ -193,24 +203,24 @@ export default function NoteDetailClient({ note, userId }: { note: ContentItem &
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <button
                   onClick={() => setDuration("1h")}
-                  className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-all ${duration === "1h" ? "bg-indigo-600 text-white border-indigo-600" : ""}`}
+                  className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-all flex items-center gap-1.5 ${duration === "1h" ? "bg-indigo-600 text-white border-indigo-600" : ""}`}
                   style={duration !== "1h" ? { borderColor: "var(--border)", color: "var(--text-primary)" } : {}}
                 >
-                  ⏱ 1 Hour
+                  <Clock className="w-3.5 h-3.5" /> 1 Hour
                 </button>
                 <button
                   onClick={() => setDuration("1d")}
-                  className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-all ${duration === "1d" ? "bg-indigo-600 text-white border-indigo-600" : ""}`}
+                  className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-all flex items-center gap-1.5 ${duration === "1d" ? "bg-indigo-600 text-white border-indigo-600" : ""}`}
                   style={duration !== "1d" ? { borderColor: "var(--border)", color: "var(--text-primary)" } : {}}
                 >
-                  📅 1 Day
+                  <Calendar className="w-3.5 h-3.5" /> 1 Day
                 </button>
                 <button
                   onClick={() => setDuration("custom")}
-                  className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-all ${duration === "custom" ? "bg-indigo-600 text-white border-indigo-600" : ""}`}
+                  className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-all flex items-center gap-1.5 ${duration === "custom" ? "bg-indigo-600 text-white border-indigo-600" : ""}`}
                   style={duration !== "custom" ? { borderColor: "var(--border)", color: "var(--text-primary)" } : {}}
                 >
-                  ⚙️ Custom Days
+                  <SlidersHorizontal className="w-3.5 h-3.5" /> Custom Days
                 </button>
               </div>
 
@@ -325,7 +335,9 @@ export default function NoteDetailClient({ note, userId }: { note: ContentItem &
                       <p className="text-xs" style={{ color: "var(--text-muted)" }}>{new Date(c.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
                     </div>
                     {c.author.id === userId && (
-                      <button onClick={() => deleteComment(c.id)} className="text-xs hover:text-red-500 transition-colors" style={{ color: "var(--text-muted)" }}>✕</button>
+                      <button onClick={() => deleteComment(c.id)} className="hover:text-red-500 transition-colors" style={{ color: "var(--text-muted)" }} aria-label="Delete comment">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
                   <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{c.content}</p>

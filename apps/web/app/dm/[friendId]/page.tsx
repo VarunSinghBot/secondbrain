@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import SideBar from "@/components/SideBar"
+import { ArrowLeft, MessageCircle, Send } from "lucide-react"
 
 interface Message {
   id: string
@@ -23,7 +24,7 @@ interface Friend {
 export default function DMPage() {
   const { friendId }       = useParams<{ friendId: string }>()
   const { data: session }  = useSession()
-  const router             = useRouter()
+  const router              = useRouter()
   const [friend,    setFriend]    = useState<Friend | null>(null)
   const [messages,  setMessages]  = useState<Message[]>([])
   const [input,     setInput]     = useState("")
@@ -111,11 +112,13 @@ export default function DMPage() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden" style={{ background: "var(--bg-primary)" }}>
-      <div className="w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center gap-3 px-6 py-4 border-b" style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}>
-          <button onClick={() => router.back()} className="text-sm mr-2 hover:opacity-70 transition-opacity" style={{ color: "var(--text-secondary)" }}>←</button>
+          <button onClick={() => router.back()} aria-label="Go back" className="mr-1 hover:opacity-70 transition-opacity" style={{ color: "var(--text-secondary)" }}>
+            <ArrowLeft className="w-4 h-4" />
+          </button>
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0" style={{ background: "var(--accent)" }}>
             {(friend?.name ?? friend?.username ?? "F").charAt(0).toUpperCase()}
           </div>
@@ -132,8 +135,8 @@ export default function DMPage() {
               <div className="w-8 h-8 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }} />
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 opacity-40">
-              <span className="text-5xl">💬</span>
+            <div className="flex flex-col items-center justify-center h-full gap-2">
+              <MessageCircle className="w-12 h-12 opacity-40" style={{ color: "var(--text-muted)" }} strokeWidth={1.5} />
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>No messages yet. Say hi!</p>
             </div>
           ) : messages.map((msg) => {
@@ -169,10 +172,11 @@ export default function DMPage() {
           <button
             onClick={send}
             disabled={sending || !input.trim()}
+            aria-label="Send message"
             className="w-10 h-10 rounded-full flex items-center justify-center text-white disabled:opacity-50 transition-all hover:shadow"
             style={{ background: "var(--accent)" }}
           >
-            ➤
+            <Send className="w-4 h-4" strokeWidth={2.25} />
           </button>
         </div>
       </div>

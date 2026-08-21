@@ -18,3 +18,6 @@ clip-sidecar/.venv/
 # state, not something to share via git.
 apps/rag-backend/.rag_jobs.json
 apps/rag-backend/.rag_jobs.*.tmp
+
+# TS incremental build cache — regenerate with `tsc`/`next dev`, per-machine.
+*.tsbuildinfo

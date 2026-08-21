@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { ChevronDown } from "lucide-react"
 import type { ContentType } from "@/lib/editor"
 
 type ToolbarButton = {
@@ -47,14 +48,17 @@ export default function EditorToolbar({
       ))}
       {children}
       <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
-      <select value={type} onChange={(e) => onTypeChange(e.target.value as ContentType)}
-              className="h-8 px-2 rounded text-xs border-0 cursor-pointer"
-              style={{ background: "var(--input-bg)", color: "var(--text-primary)" }}>
-        <option value="article">📄 Article</option>
-        <option value="image">🖼 Image</option>
-        <option value="audio">🎵 Audio</option>
-        <option value="video">🎬 Video</option>
-      </select>
+      <div className="relative">
+        <select value={type} onChange={(e) => onTypeChange(e.target.value as ContentType)}
+                className="h-8 pl-2 pr-6 rounded text-xs border-0 cursor-pointer appearance-none"
+                style={{ background: "var(--input-bg)", color: "var(--text-primary)" }}>
+          <option value="article">Article</option>
+          <option value="image">Image</option>
+          <option value="audio">Audio</option>
+          <option value="video">Video</option>
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: "var(--text-muted)" }} />
+      </div>
     </div>
   )
 }
