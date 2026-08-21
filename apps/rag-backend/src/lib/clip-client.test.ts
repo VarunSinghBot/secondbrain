@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest"
 const { UNREACHABLE_URL } = vi.hoisted(() => ({ UNREACHABLE_URL: "http://127.0.0.1:59999" }))
 
 vi.mock("./config", () => ({
-  config: { clipSidecarUrl: UNREACHABLE_URL },
+  config: { clipSidecarUrl: UNREACHABLE_URL, clipTagThreshold: 0.19, clipTagTopN: 5 },
   requireConfig: (value: string, name: string) => {
     if (!value) throw new Error(`${name} is not configured`)
     return value

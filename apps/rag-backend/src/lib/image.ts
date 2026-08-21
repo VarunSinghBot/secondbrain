@@ -64,7 +64,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
   }
 
   if (mode === "ocr") {
-    // Mode OCR: OCR text extraction -> Groq text embedding (768-dim) -> rag_text
+    // Mode OCR: OCR text extraction -> Gemini text embedding (768-dim) -> rag_text
     const extractedText = await extractOcrText(buffer, fileName)
     const textVec = await embedText(extractedText, "RETRIEVAL_DOCUMENT")
     const pointId = randomUUID()
@@ -82,7 +82,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
       text: extractedText,
     })
   } else {
-    // Mode CLIP: CLIP sidecar vector (512-dim) -> rag_images + Tag description vector (768-dim Groq) -> rag_text
+    // Mode CLIP: CLIP sidecar vector (512-dim) -> rag_images + Tag description vector (768-dim Gemini) -> rag_text
     let clipVector: number[]
     let tags: string[]
     try {
@@ -126,11 +126,11 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
       text: tagText,
     })
 
-    // Upsert 768-dim Groq text description vector to rag_text
+    // Upsert 768-dim Gemini text description vector to rag_text
     const textVec = await embedText(tagText, "RETRIEVAL_DOCUMENT")
     const txtPointId = randomUUID()
     await upsertChunk(txtPointId, textVec, {
-      contentId: `${contentId}-tagdesc`,
+      contentId,
       userId,
       sourceType: "image",
       sourceUrl: sourceUrl || cloudinaryUrl,
