@@ -21,6 +21,7 @@
     "@secondbrain/types": "workspace:*",
     "bcrypt": "^5.1.1",
     "cloudinary": "^2.10.0",
+    "lucide-react": "^1.31.0",
     "next": "^15.5.23",
     "next-auth": "5.0.0-beta.32",
     "pg": "^8.22.0",

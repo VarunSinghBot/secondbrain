@@ -2,6 +2,7 @@
 
 import { useState, type RefObject, type DragEvent } from "react"
 import toast from "react-hot-toast"
+import { UploadCloud } from "lucide-react"
 import type { MediaTool } from "@/lib/editor"
 
 export default function EditorBody({
@@ -87,7 +88,7 @@ export default function EditorBody({
             background: "rgba(0, 0, 0, 0.4)",
           }}
         >
-          <span className="text-4xl mb-2 animate-bounce">☁️</span>
+          <UploadCloud className="w-10 h-10 mb-2 text-white animate-bounce" strokeWidth={1.75} />
           <p className="text-lg font-bold text-white">Drop media here to upload to Cloudinary</p>
           <p className="text-xs text-gray-200 mt-1">Supports Images, Audio, and Video files</p>
         </div>
@@ -111,4 +112,3 @@ export default function EditorBody({
     </div>
   )
 }
-

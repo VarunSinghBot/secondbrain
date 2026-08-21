@@ -3,6 +3,12 @@ import { usePathname, useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
 import toast, { Toaster } from "react-hot-toast"
+import {
+  Brain, Home, Share2, Link2, Settings, ChevronDown, ChevronUp,
+  FileText, Image as ImageIcon, Music, Video, MessageCircle, LogOut,
+  Menu, X, UserPlus, Check as CheckIcon,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 interface Friend { id: string; name: string | null; email: string | null; username: string | null }
 interface FriendRequest { id: string; sender: { id: string; name: string | null; email: string | null } }
@@ -17,6 +23,7 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
   const [friendEmail,   setFriendEmail]   = useState("")
   const [addLoading,    setAddLoading]    = useState(false)
   const [showFilters,   setShowFilters]   = useState(false)
+  const [mobileOpen,    setMobileOpen]    = useState(false)
 
   useEffect(() => {
     fetch("/api/friends").then((r) => r.json()).then((d) => Array.isArray(d) && setFriends(d)).catch(() => {})
@@ -52,37 +59,68 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
     }
   }
 
-  const navItem = (label: string, href: string, active: boolean) => (
-    <button key={label} onClick={() => router.push(href)}
-      className="w-full h-[40px] text-left px-3 rounded-lg text-sm font-medium transition-all duration-200"
-      style={active ? { background: "var(--accent)", color: "#fff" } : { color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+  const navItem = (Icon: LucideIcon, label: string, href: string, active: boolean) => (
+    <button key={label} onClick={() => { router.push(href); setMobileOpen(false) }}
+      className="w-full h-[40px] flex items-center gap-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-200"
+      style={active
+        ? {
+            background: "color-mix(in srgb, var(--accent) 12%, transparent)",
+            color: "var(--accent)",
+            border: "1px solid transparent",
+            boxShadow: "inset 3px 0 0 0 var(--accent)",
+          }
+        : {
+            color: "var(--text-secondary)",
+            border: "1px solid var(--border)",
+            boxShadow: "inset 3px 0 0 0 transparent",
+          }}>
+      <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
       {label}
     </button>
   )
 
-  const filters = [
-    { label: "📄 Article", type: "article" },
-    { label: "🖼 Image",   type: "image" },
-    { label: "🎵 Audio",   type: "audio" },
-    { label: "🎬 Video",   type: "video" },
+  const filters: { label: string; type: string; icon: LucideIcon }[] = [
+    { label: "Article", type: "article", icon: FileText },
+    { label: "Image",   type: "image",   icon: ImageIcon },
+    { label: "Audio",   type: "audio",   icon: Music },
+    { label: "Video",   type: "video",   icon: Video },
   ]
 
   return (
     <>
       <Toaster position="bottom-right" reverseOrder />
-      <div className="relative h-full w-full flex flex-col overflow-y-auto pt-4 pb-4 transition-colors duration-300" style={{ background: "var(--bg-sidebar)", borderRight: "1px solid var(--border)" }}>
+
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setMobileOpen((p) => !p)}
+        aria-label={mobileOpen ? "Close menu" : "Open menu"}
+        className="md:hidden fixed top-3 left-3 z-50 h-10 w-10 rounded-lg flex items-center justify-center shadow-md"
+        style={{ background: "var(--accent)" }}>
+        {mobileOpen ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5 text-white" />}
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setMobileOpen(false)} />
+      )}
+
+      <div
+        className={`fixed md:static inset-y-0 left-0 z-40 w-72 md:w-full h-full flex flex-col overflow-y-auto pt-4 pb-4 transition-transform duration-300 md:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{ background: "var(--bg-sidebar)", borderRight: "1px solid var(--border)" }}>
         {/* Logo */}
-        <div className="flex items-center px-4 mb-4 flex-shrink-0">
-          <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold mr-2" style={{ background: "var(--accent)" }}>S</div>
+        <div className="flex items-center px-4 mb-4 flex-shrink-0 md:pl-4 pl-14">
+          <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white mr-2 flex-shrink-0" style={{ background: "var(--accent)" }}>
+            <Brain className="w-5 h-5" strokeWidth={2.25} />
+          </div>
           <h1 className="text-lg font-bold" style={{ color: "var(--accent)" }}>Second Brain</h1>
         </div>
 
         {/* Nav */}
         <div className="flex flex-col gap-1.5 px-3 mb-3">
-          {navItem("🏠 Dashboard",         "/main",     pathname === "/main")}
-          {navItem("🤝 Shared With Me",    "/shared",   pathname === "/shared")}
-          {navItem("📤 My Shared Links",   "/sharing",  pathname === "/sharing")}
-          {navItem("⚙️ Settings",          "/settings", pathname === "/settings")}
+          {navItem(Home,   "Dashboard",       "/main",     pathname === "/main")}
+          {navItem(Share2, "Shared With Me",  "/shared",   pathname === "/shared")}
+          {navItem(Link2,  "My Shared Links", "/sharing",  pathname === "/sharing")}
+          {navItem(Settings, "Settings",      "/settings", pathname === "/settings")}
         </div>
 
         <div className="mx-3 h-px mb-3" style={{ background: "var(--border)" }} />
@@ -92,14 +130,17 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
           <button onClick={() => setShowFilters((p) => !p)} className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider py-1"
             style={{ color: "var(--text-muted)" }}>
             <span>Filter by type</span>
-            <span>{showFilters ? "▲" : "▼"}</span>
+            {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
           {showFilters && (
             <div className="flex flex-col gap-1.5 mt-2">
               <button onClick={() => onFilter?.(null)} className="w-full h-8 rounded-lg text-xs font-medium text-white" style={{ background: "var(--accent)" }}>Reset</button>
               {filters.map((f) => (
-                <button key={f.type} onClick={() => onFilter?.(f.type)} className="w-full h-9 rounded-lg text-sm text-left px-3 transition-all hover:opacity-80"
-                  style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}>{f.label}</button>
+                <button key={f.type} onClick={() => onFilter?.(f.type)} className="w-full h-9 rounded-lg text-sm text-left px-3 flex items-center gap-2.5 transition-all hover:opacity-80"
+                  style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                  <f.icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+                  {f.label}
+                </button>
               ))}
             </div>
           )}
@@ -117,8 +158,12 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
               <div key={req.id} className="rounded-lg p-2 mb-1.5" style={{ background: "var(--input-bg)" }}>
                 <p className="text-xs font-medium mb-1" style={{ color: "var(--text-primary)" }}>{req.sender.name ?? req.sender.email}</p>
                 <div className="flex gap-1.5">
-                  <button onClick={() => handleRequest(req.id, "accept")} className="flex-1 py-0.5 text-xs text-white rounded font-medium" style={{ background: "#22c55e" }}>Accept</button>
-                  <button onClick={() => handleRequest(req.id, "reject")} className="flex-1 py-0.5 text-xs text-white rounded font-medium" style={{ background: "#ef4444" }}>Reject</button>
+                  <button onClick={() => handleRequest(req.id, "accept")} className="flex-1 py-0.5 text-xs text-white rounded font-medium flex items-center justify-center gap-1" style={{ background: "#22c55e" }}>
+                    <CheckIcon className="w-3 h-3" /> Accept
+                  </button>
+                  <button onClick={() => handleRequest(req.id, "reject")} className="flex-1 py-0.5 text-xs text-white rounded font-medium flex items-center justify-center gap-1" style={{ background: "#ef4444" }}>
+                    <X className="w-3 h-3" /> Reject
+                  </button>
                 </div>
               </div>
             ))}
@@ -129,7 +174,9 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
         <div className="px-3 mb-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Friends ({friends.length})</p>
-            <button onClick={() => setShowAddFriend((p) => !p)} className="text-xs px-2 py-0.5 rounded text-white font-medium" style={{ background: "var(--accent)" }}>+ Add</button>
+            <button onClick={() => setShowAddFriend((p) => !p)} className="text-xs pl-1.5 pr-2 py-0.5 rounded text-white font-medium flex items-center gap-1" style={{ background: "var(--accent)" }}>
+              <UserPlus className="w-3 h-3" /> Add
+            </button>
           </div>
 
           {showAddFriend && (
@@ -147,7 +194,7 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
             {friends.length === 0 ? (
               <p className="text-xs py-2 text-center" style={{ color: "var(--text-muted)" }}>No friends yet</p>
             ) : friends.map((f) => (
-              <button key={f.id} onClick={() => router.push(`/dm/${f.id}`)}
+              <button key={f.id} onClick={() => { router.push(`/dm/${f.id}`); setMobileOpen(false) }}
                 className="flex items-center gap-2 p-1.5 rounded-lg transition-all hover:opacity-80"
                 style={{ border: "1px solid var(--border)" }}>
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: "var(--accent)" }}>
@@ -157,7 +204,7 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
                   <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{f.name ?? f.username ?? "Friend"}</p>
                   <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{f.email}</p>
                 </div>
-                <span className="ml-auto text-xs" style={{ color: "var(--text-muted)" }}>💬</span>
+                <MessageCircle className="ml-auto w-3.5 h-3.5 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
               </button>
             ))}
           </div>
@@ -167,13 +214,9 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
 
         {/* Chat + Logout */}
         <div className="flex flex-col gap-2 px-3 mt-auto">
-          {/* <a href={process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:5174"} target="_blank" rel="noopener noreferrer"
-            className="w-full h-[40px] flex items-center justify-center text-sm font-medium rounded-lg border transition-all hover:opacity-80"
-            style={{ borderColor: "#22c55e", color: "#22c55e" }}>
-            💬 Group Chat
-          </a> */}
-          <button onClick={logout} className="w-full h-[40px] text-sm font-medium text-white rounded-lg transition-all hover:opacity-90"
+          <button onClick={logout} className="w-full h-[40px] text-sm font-medium text-white rounded-lg transition-all hover:opacity-90 flex items-center justify-center gap-2"
             style={{ background: "var(--accent)" }}>
+            <LogOut className="w-4 h-4" />
             Logout
           </button>
         </div>
