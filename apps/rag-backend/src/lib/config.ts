@@ -78,6 +78,23 @@ export const config = {
   // with the "no sufficient context" fallback instead of calling the LLM.
   // Was hardcoded as MIN_OVERALL_SCORE in indexer.ts.
   minOverallScore: Number(getEnv("MIN_OVERALL_SCORE") ?? 0.21),
+
+  // ─── CLIP zero-shot image/frame tagging (clip-client.ts, clip-sidecar/main.py) ───
+  // Same names/defaults as clip-sidecar's own env vars, since the two need to
+  // agree — but they're separate processes with separate environments, so
+  // both must be set if overriding. Calibrated against real score
+  // distributions from an indexed photo and an indexed cartoon video frame:
+  // with only 47 candidate tags, top_k was doing all the real filtering
+  // (threshold 0.18 sits below nearly every candidate's score), so capping to
+  // the top 5 is what actually removes the long tail of unrelated tags.
+  clipTagThreshold: Number(getEnv("CLIP_TAG_THRESHOLD") ?? 0.19),
+  clipTagTopN: Number(getEnv("CLIP_TAG_TOP_N") ?? 5),
+
+  // Keyframes sampled per video for visual (CLIP) tagging (video.ts). This is
+  // a starting point, not a tuned final value — untested against long videos
+  // or ones with fast-changing visual content, where 8 evenly-spaced frames
+  // may be too sparse.
+  maxVideoFrames: Number(getEnv("MAX_VIDEO_FRAMES") ?? 8),
 }
 
 export function requireConfig(value: string, name: string): string {

@@ -111,7 +111,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       try {
         await fetch(`${ragBackendUrl.replace(/\/$/, "")}/delete`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": process.env.RAG_INTERNAL_SECRET ?? "",
+          },
           body: JSON.stringify({ userId: session.user.id, contentId: id }),
         })
       } catch (ragErr) {

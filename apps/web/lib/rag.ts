@@ -7,7 +7,10 @@ export async function queueRagIndexing(payload: RagIndexRequest): Promise<{ ok: 
   try {
     const response = await fetch(`${ragBackendUrl.replace(/\/$/, "")}/index`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": process.env.RAG_INTERNAL_SECRET ?? "",
+      },
       body: JSON.stringify(payload),
     })
 

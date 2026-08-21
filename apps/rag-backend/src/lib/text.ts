@@ -1,3 +1,15 @@
+/**
+ * Joins tags into a natural-language list ("a, b, and c") instead of a
+ * comma-separated field dump, so image/video-frame descriptions read as
+ * prose rather than a labeled form when embedded and later shown to the LLM.
+ */
+export function joinNaturally(items: string[]): string {
+  if (items.length === 0) return ""
+  if (items.length === 1) return items[0]
+  if (items.length === 2) return `${items[0]} and ${items[1]}`
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`
+}
+
 export function stripHtml(input: string): string {
   return input.replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")

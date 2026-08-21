@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto"
 import { downloadUrl } from "./download"
 import { transcribeAudio } from "./groq"
 import { embedImage, tagImage } from "./clip-client"
-import { chunkText } from "./text"
+import { chunkText, joinNaturally } from "./text"
 import { embedText } from "./embeddings"
 import { upsertChunk, upsertImageVector } from "./qdrant"
 import { uploadToCloudinary } from "./cloudinary"
@@ -24,6 +24,28 @@ async function runFfmpeg(args: string[]): Promise<void> {
   })
 }
 
+// ffprobe ships alongside ffmpeg (same apt/brew package), used here only to
+// learn the video's duration so keyframes can be timestamped and sampled at
+// even wall-clock intervals rather than even frame-count intervals.
+async function getVideoDurationSeconds(videoPath: string): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    let stdout = ""
+    const proc = spawn("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      videoPath,
+    ])
+    proc.stdout.on("data", (chunk) => { stdout += chunk.toString() })
+    proc.on("error", reject)
+    proc.on("exit", (code) => {
+      const seconds = Number.parseFloat(stdout.trim())
+      if (code === 0 && Number.isFinite(seconds) && seconds > 0) resolve(seconds)
+      else reject(new Error(`ffprobe failed to read duration (exit ${code ?? "unknown"})`))
+    })
+  })
+}
+
 export interface IngestVideoOptions {
   userId: string
   contentId: string
@@ -34,7 +56,7 @@ export interface IngestVideoOptions {
 }
 
 export async function processAndIndexVideo(options: IngestVideoOptions): Promise<{ cloudinaryUrl: string; indexedAudioChunks: number; indexedFrames: number }> {
-  const { userId, contentId, sourceName = "video", sourceUrl, buffer: providedBuffer, maxFrames = 10 } = options
+  const { userId, contentId, sourceName = "video", sourceUrl, buffer: providedBuffer, maxFrames = config.maxVideoFrames } = options
 
   const videoBuffer = providedBuffer || (await downloadUrl(sourceUrl)).buffer
 
@@ -93,40 +115,71 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
       }
     }
 
+    // Sample at fps = maxFrames/duration so frames land at even wall-clock
+    // intervals across the whole video (not even frame-count intervals,
+    // which drift on variable-frame-rate content) — this is what lets each
+    // frame get an accurate timestampSeconds below.
+    const durationSeconds = await getVideoDurationSeconds(videoPath).catch((err) => {
+      console.warn("Video keyframe sampling skipped — ffprobe could not read duration:", err)
+      return 0
+    })
+
     const framePattern = join(tempDir, "frame_%03d.jpg")
-    await runFfmpeg([
-      "-y",
-      "-i",
-      videoPath,
-      "-vf",
-      `select='not(mod(n\\,max(1\\,trunc(n_frames/${maxFrames}))))'`,
-      "-vsync",
-      "vfr",
-      "-q:v",
-      "2",
-      framePattern,
-    ]).catch(() => {})
+    if (durationSeconds > 0) {
+      await runFfmpeg([
+        "-y",
+        "-i",
+        videoPath,
+        "-vf",
+        `fps=${maxFrames}/${durationSeconds}`,
+        // -vsync was removed in recent ffmpeg builds (replaced by
+        // -fps_mode) — this call was silently failing with "Unrecognized
+        // option 'vsync'" before this fix, meaning keyframe extraction
+        // never actually produced any frames on a current ffmpeg.
+        "-fps_mode",
+        "vfr",
+        "-q:v",
+        "2",
+        framePattern,
+      ]).catch((err) => console.warn("Video keyframe extraction (ffmpeg) failed:", err))
+    }
 
     const files = await readdir(tempDir)
     const frameFiles = files.filter((f) => f.startsWith("frame_") && f.endsWith(".jpg")).sort().slice(0, maxFrames)
+    // Frames are evenly spaced across the actual duration regardless of how
+    // many ffmpeg produced (fps rounding can be off by one frame either way).
+    const frameInterval = frameFiles.length > 0 ? durationSeconds / frameFiles.length : 0
 
     for (let idx = 0; idx < frameFiles.length; idx++) {
       const fName = frameFiles[idx]
       const fPath = join(tempDir, fName)
       const frameBuffer = await readFile(fPath)
+      const timestampSeconds = Math.round(idx * frameInterval)
 
       try {
         const [clipVec, tags] = await Promise.all([
           embedImage(frameBuffer, "image/jpeg"),
-          tagImage(frameBuffer, "image/jpeg", 0.18, 8).catch(() => []),
+          tagImage(frameBuffer, "image/jpeg").catch(() => []),
         ])
 
-        const caption = tags.length ? `Video frame ${idx} containing: ${tags.join(", ")}` : `Video frame ${idx}`
-        const tagText = `Video frame ${idx}. Tags: ${tags.join(", ") || "none"}. Source: ${cloudinaryUrl}`
+        // A flowing sentence, not a labeled field dump — this is what gets
+        // embedded and later shown to the LLM as retrieved context, and the
+        // model tends to mirror the shape of what it's given.
+        const titledAs = sourceName ? ` from "${sourceName}"` : ""
+        const caption = tags.length
+          ? `A video frame${titledAs} showing ${joinNaturally(tags)}.`
+          : `A video frame${titledAs} with no clearly recognizable subject.`
+        const tagText = caption
 
+        // contentId is the PARENT video's, unmodified (not a derived
+        // per-frame id) — Task 5's deleteContentVectors(userId, contentId)
+        // filters on an exact contentId match, so every frame must share it
+        // to actually get cleaned up when the video is edited/re-indexed.
+        // chunkIndex (not contentId) is what distinguishes individual frames,
+        // same pattern already used for audio/PDF/text chunks.
         const imgPointId = randomUUID()
         await upsertImageVector(imgPointId, clipVec, {
-          contentId: `${contentId}-frame-${idx}`,
+          contentId,
           userId,
           sourceType: "video",
           sourceUrl: `${cloudinaryUrl}#frame_${idx}`,
@@ -138,12 +191,13 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
           caption,
           chunkIndex: idx,
           text: tagText,
+          timestampSeconds,
         })
 
         const textVec = await embedText(tagText, "RETRIEVAL_DOCUMENT")
         const txtPointId = randomUUID()
         await upsertChunk(txtPointId, textVec, {
-          contentId: `${contentId}-frame-${idx}-desc`,
+          contentId,
           userId,
           sourceType: "video",
           sourceUrl: `${cloudinaryUrl}#frame_${idx}`,
@@ -153,6 +207,7 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
           modality: "video_frame",
           tags,
           chunkIndex: idx,
+          timestampSeconds,
           text: tagText,
         })
 

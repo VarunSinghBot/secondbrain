@@ -21,7 +21,10 @@ export async function POST(req: NextRequest) {
   try {
     const response = await fetch(`${backendUrl.replace(/\/$/, "")}/ask`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": process.env.RAG_INTERNAL_SECRET ?? "",
+      },
       body: JSON.stringify({
         query: body.query,
         userId: session.user.id,
