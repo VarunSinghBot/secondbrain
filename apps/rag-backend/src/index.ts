@@ -10,7 +10,7 @@ import { embedText } from "./lib/embeddings"
 import { ClipSidecarUnavailableError, embedTextClip } from "./lib/clip-client"
 import { searchSimilar, searchSimilarImages } from "./lib/qdrant"
 import { generateGroqAnswer } from "./lib/groq"
-import { buildGroundedSystemPrompt, citedSourceIndices, labelForSource, validateUserQuery } from "./lib/guardrails"
+import { buildGroundedSystemPrompt, citedSourceIndices, labelForSource, stripCitationMarkers, validateUserQuery } from "./lib/guardrails"
 
 dotenv.config()
 
@@ -142,7 +142,7 @@ app.post("/ask", requireInternalSecret, async (req: Request<unknown, unknown, Ra
         timestampSeconds: source.timestampSeconds ?? null,
       }))
 
-    return res.json({ answer, citations })
+    return res.json({ answer: stripCitationMarkers(answer), citations })
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Ask failed"
     const isValidationError = /injection|restricted|invalid|guardrail/i.test(msg)

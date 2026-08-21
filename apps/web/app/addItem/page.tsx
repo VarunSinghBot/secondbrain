@@ -21,6 +21,8 @@ export default function AddItemPage() {
   const [type,      setType]      = useState<ContentType>("article")
   const [tags,      setTags]      = useState<string[]>([])
   const [tagInput,  setTagInput]  = useState("")
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([])
+  const [suggestingTags, setSuggestingTags] = useState(false)
   const [error,     setError]     = useState("")
   const [saving,    setSaving]    = useState(false)
   const [wordCount, setWordCount] = useState(0)
@@ -101,6 +103,29 @@ export default function AddItemPage() {
     countWords()
   }, [countWords, placeCursorAtEnd])
 
+  // rag-backend/api/tags/suggest only generates real suggestions for
+  // type === "image" (STRICT REQUIREMENT there) — callers below gate on
+  // that before invoking this, so `type` is always "image" by the time
+  // this actually runs, but it's still passed through rather than
+  // hardcoded so the payload stays honest about what was asked.
+  const fetchTagSuggestions = useCallback(async (imageUrl: string) => {
+    setSuggestingTags(true)
+    try {
+      const res = await fetch("/api/tags/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl, title, body: bodyRef.current?.innerText ?? "", type }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setSuggestedTags(data.suggestions ?? [])
+    } catch {
+      // Suggestions are a nice-to-have — a failure here shouldn't interrupt writing.
+    } finally {
+      setSuggestingTags(false)
+    }
+  }, [title, type])
+
   const openMediaPopover = (tool: MediaTool) => {
     setActiveMediaTool((current) => (current === tool ? null : tool))
     setMediaInput("")
@@ -112,6 +137,7 @@ export default function AddItemPage() {
     if (!html) return
 
     insertHtmlAtCursor(html)
+    if (activeMediaTool === "image" && type === "image") fetchTagSuggestions(mediaInput)
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
@@ -121,10 +147,11 @@ export default function AddItemPage() {
     const html = buildMediaHtml(tool, url)
     if (!html) return
     insertHtmlAtCursor(html)
+    if (tool === "image" && type === "image") fetchTagSuggestions(url)
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
-  }, [insertHtmlAtCursor])
+  }, [insertHtmlAtCursor, type, fetchTagSuggestions])
 
   const format = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value)
@@ -138,6 +165,10 @@ export default function AddItemPage() {
   }
 
   const removeTag = (tag: string) => setTags((p) => p.filter((t) => t !== tag))
+
+  const addSuggestedTag = (tag: string) => {
+    if (!tags.includes(tag)) setTags((p) => [...p, tag])
+  }
 
   const save = async () => {
     if (!title.trim()) { setError("Title is required"); return }
@@ -267,9 +298,12 @@ export default function AddItemPage() {
             <TagInput
               tags={tags}
               tagInput={tagInput}
+              suggestedTags={suggestedTags}
+              suggestingTags={suggestingTags}
               onTagInputChange={setTagInput}
               onAddTag={addTag}
               onRemoveTag={removeTag}
+              onAddSuggestedTag={addSuggestedTag}
             />
 
             {error && <p className="mt-4 text-red-500 text-sm">{error}</p>}

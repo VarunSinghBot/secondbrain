@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 
+// Live-measured: a real request through this route once took 75.8s end to
+// end with no bound on either fetch — from the user's side that's
+// indistinguishable from "broken." Each external hop gets its own timeout
+// so a slow image host or a busy OCR.space (this uses their shared public
+// demo key, "K85658722688957", when OCR_SPACE_API_KEY isn't set — heavily
+// used, so it's a plausible slow point) degrades to "no OCR text" instead
+// of hanging the whole suggestion.
+const FETCH_TIMEOUT_MS = 8000
+
 async function extractTextFromImage(imageUrl: string): Promise<string> {
   try {
-    const imgRes = await fetch(imageUrl)
+    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!imgRes.ok) return ""
     const arrayBuf = await imgRes.arrayBuffer()
     const buffer = Buffer.from(arrayBuf)
@@ -18,13 +27,14 @@ async function extractTextFromImage(imageUrl: string): Promise<string> {
     const ocrRes = await fetch("https://api.ocr.space/parse/image", {
       method: "POST",
       body: formData,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
 
     if (!ocrRes.ok) return ""
     const data = (await ocrRes.json()) as { ParsedResults?: Array<{ ParsedText?: string }> }
     return data.ParsedResults?.[0]?.ParsedText?.trim() ?? ""
   } catch (err) {
-    console.warn("OCR Tag extraction warning:", err)
+    console.warn("OCR Tag extraction warning (treating as no text found):", err)
     return ""
   }
 }
@@ -44,7 +54,16 @@ async function generateTagsWithGroq(imageText: string, title?: string, imageUrl?
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        // llama-3.3-70b-versatile was retired from Groq's API (404s on every
+        // call) — see rag-backend's e882215 fix, which swapped its own
+        // hardcoded references to this same model.
+        model: "openai/gpt-oss-120b",
+        // gpt-oss-120b is a reasoning model — without this, its hidden
+        // chain-of-thought eats the whole max_tokens budget before it ever
+        // emits the actual tag list, leaving `content` empty (confirmed live:
+        // finish_reason "length", content "" at max_tokens=60 without this).
+        // "low" is enough reasoning for a 3-5 word tag list.
+        reasoning_effort: "low",
         messages: [
           {
             role: "system",
@@ -55,6 +74,7 @@ async function generateTagsWithGroq(imageText: string, title?: string, imageUrl?
         temperature: 0.3,
         max_tokens: 60,
       }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
 
     if (!res.ok) return []

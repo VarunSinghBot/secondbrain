@@ -1,11 +1,12 @@
 "use client"
 
-import { X, Plus } from "lucide-react"
+import { X, Plus, Loader2 } from "lucide-react"
 
 export default function TagInput({
   tags,
   tagInput,
   suggestedTags = [],
+  suggestingTags = false,
   onTagInputChange,
   onAddTag,
   onRemoveTag,
@@ -14,6 +15,7 @@ export default function TagInput({
   tags: string[]
   tagInput: string
   suggestedTags?: string[]
+  suggestingTags?: boolean
   onTagInputChange: (value: string) => void
   onAddTag: () => void
   onRemoveTag: (tag: string) => void
@@ -37,6 +39,13 @@ export default function TagInput({
           </span>
         ))}
       </div>
+
+      {suggestingTags && (
+        <div className="mb-4 flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Generating tag suggestions for your image…
+        </div>
+      )}
 
       {unaddedSuggestions.length > 0 && (
         <div className="mb-4 p-3 rounded-xl border flex flex-col gap-2"

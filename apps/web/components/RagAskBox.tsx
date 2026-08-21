@@ -1,16 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Sparkles, Send, RefreshCw, Loader2 } from "lucide-react"
+import { Sparkles, Send, Loader2 } from "lucide-react"
 
-import type { RagAskResponse, RagReindexResponse } from "@secondbrain/types"
+import type { RagAskResponse } from "@secondbrain/types"
 
 export default function RagAskBox() {
   const [query, setQuery] = useState("")
   const [answer, setAnswer] = useState("")
   const [citations, setCitations] = useState<RagAskResponse["citations"]>([])
   const [loading, setLoading] = useState(false)
-  const [reindexing, setReindexing] = useState(false)
   const [error, setError] = useState("")
 
   // Auto-index any missing/stale content by default when dashboard loads.
@@ -56,26 +55,6 @@ export default function RagAskBox() {
     }
   }
 
-  const reindex = async (force: boolean) => {
-    setReindexing(true)
-    try {
-      const response = await fetch("/api/rag/reindex", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force }),
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error ?? "Failed to reindex")
-      }
-      setError("")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reindex")
-    } finally {
-      setReindexing(false)
-    }
-  }
-
   return (
     <div className="rounded-2xl border p-4 mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border)", boxShadow: "var(--shadow)" }}>
       <div className="flex flex-col gap-3">
@@ -84,7 +63,7 @@ export default function RagAskBox() {
             <Sparkles className="w-5 h-5" style={{ color: "var(--accent)" }} strokeWidth={2} />
             Ask your brain
           </h2>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Search across your notes, media, and uploaded files with Gemini + Qdrant.</p>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Search across your notes, media, and uploaded files</p>
         </div>
 
         <textarea
@@ -109,15 +88,6 @@ export default function RagAskBox() {
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
             {loading ? "Searching..." : "Ask"}
-          </button>
-          <button
-            onClick={() => reindex(false)}
-            disabled={reindexing}
-            className="rounded-full border px-4 py-2 text-sm font-medium disabled:opacity-60 flex items-center gap-1.5"
-            style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
-          >
-            {reindexing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            {reindexing ? "Reindexing..." : "Reindex old notes/files"}
           </button>
           {error && <span className="text-sm text-red-500">{error}</span>}
         </div>

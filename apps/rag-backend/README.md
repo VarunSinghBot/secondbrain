@@ -148,6 +148,20 @@ Gemini), one service has to be running **locally** before you start rag-backend:
   docker compose up clip-sidecar
   ```
 
+- **ffmpeg / ffprobe** — required on the machine running rag-backend itself
+  (not a separate service) for video ingestion: `ffmpeg` extracts the audio
+  track and samples keyframes, `ffprobe` reads a video's duration to time
+  those keyframes. Without both on `PATH`, video uploads fail. Not needed
+  for any other content type.
+
+  ```bash
+  # macOS
+  brew install ffmpeg
+
+  # Ubuntu/Debian
+  sudo apt-get update && sudo apt-get install -y ffmpeg
+  ```
+
 ---
 
 ## API Endpoints

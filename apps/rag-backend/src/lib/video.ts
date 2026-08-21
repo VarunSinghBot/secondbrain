@@ -15,11 +15,15 @@ import { config } from "./config"
 
 async function runFfmpeg(args: string[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn("ffmpeg", args, { stdio: "ignore" })
-    proc.on("error", reject)
+    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] })
+    let stderr = ""
+    proc.stderr.on("data", (chunk) => { stderr += chunk.toString() })
+    proc.on("error", (err) => {
+      reject(new Error(`Could not start ffmpeg (is it installed and on PATH for this process?): ${err.message}`))
+    })
     proc.on("exit", (code) => {
       if (code === 0) resolve()
-      else reject(new Error(`ffmpeg exited with code ${code ?? "unknown"}`))
+      else reject(new Error(`ffmpeg exited with code ${code ?? "unknown"}${stderr ? `: ${stderr.trim().slice(-500)}` : " (no stderr output)"}`))
     })
   })
 }
@@ -82,7 +86,10 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
 
     const hasAudio = await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "pcm_s16le", audioPath])
       .then(() => true)
-      .catch(() => false)
+      .catch((err) => {
+        console.warn("Video audio-track extraction failed (treating as no audio):", err)
+        return false
+      })
 
     if (hasAudio) {
       try {
@@ -215,6 +222,15 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
       } catch (frameErr) {
         console.warn(`Failed to process frame ${idx}:`, frameErr)
       }
+    }
+
+    if (indexedAudioChunks === 0 && indexedFrames === 0) {
+      console.warn(
+        `Video ${contentId} produced zero indexed content (no audio transcript, no frames) — ` +
+        `this video has no searchable RAG content. Check the ffmpeg warnings above for the real ` +
+        `cause (missing/unreachable ffmpeg binary, unsupported codec, or a genuinely silent video ` +
+        `with no visual motion for keyframe sampling to catch).`
+      )
     }
 
     return { cloudinaryUrl, indexedAudioChunks, indexedFrames }

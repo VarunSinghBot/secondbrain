@@ -134,6 +134,21 @@ export function citedSourceIndices(answer: string): Set<number> {
   return indices
 }
 
+/**
+ * Strips the full-width "【1】" / "【1†L1-L2】" citation markers
+ * citedSourceIndices() above matches from the text shown to the user —
+ * call this AFTER citedSourceIndices() has already run on the raw answer,
+ * since it needs those markers intact to do its matching. Plain ASCII
+ * "[1]" style citations are left as-is; they're the format the prompt
+ * actually asks for and read fine in the UI.
+ */
+export function stripCitationMarkers(answer: string): string {
+  return answer
+    .replace(/【\d+[^】]*】/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim()
+}
+
 function formatTimestamp(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = Math.floor(totalSeconds % 60)
@@ -155,6 +170,7 @@ export function labelForSource(source: RAGSourceContext): string {
   if (modality === "image") return "Image source"
   if (modality === "audio") return "Audio source"
   if (modality === "video") return "Video source"
+  if (modality === "video_audio") return "Video transcript source"
   return "Note source"
 }
 
