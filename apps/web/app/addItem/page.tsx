@@ -108,13 +108,13 @@ export default function AddItemPage() {
   // that before invoking this, so `type` is always "image" by the time
   // this actually runs, but it's still passed through rather than
   // hardcoded so the payload stays honest about what was asked.
-  const fetchTagSuggestions = useCallback(async (imageUrl: string) => {
+  const fetchTagSuggestions = useCallback(async (imageUrl: string, suggestionType: ContentType) => {
     setSuggestingTags(true)
     try {
       const res = await fetch("/api/tags/suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl, title, body: bodyRef.current?.innerText ?? "", type }),
+        body: JSON.stringify({ imageUrl, title, body: bodyRef.current?.innerText ?? "", type: suggestionType }),
       })
       if (!res.ok) return
       const data = await res.json()
@@ -124,7 +124,7 @@ export default function AddItemPage() {
     } finally {
       setSuggestingTags(false)
     }
-  }, [title, type])
+  }, [title])
 
   const openMediaPopover = (tool: MediaTool) => {
     setActiveMediaTool((current) => (current === tool ? null : tool))
@@ -137,7 +137,10 @@ export default function AddItemPage() {
     if (!html) return
 
     insertHtmlAtCursor(html)
-    if (activeMediaTool === "image" && type === "image") fetchTagSuggestions(mediaInput)
+    if (activeMediaTool === "image") {
+      setType("image")
+      fetchTagSuggestions(mediaInput, "image")
+    }
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
@@ -147,11 +150,14 @@ export default function AddItemPage() {
     const html = buildMediaHtml(tool, url)
     if (!html) return
     insertHtmlAtCursor(html)
-    if (tool === "image" && type === "image") fetchTagSuggestions(url)
+    if (tool === "image") {
+      setType("image")
+      fetchTagSuggestions(url, "image")
+    }
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
-  }, [insertHtmlAtCursor, type, fetchTagSuggestions])
+  }, [insertHtmlAtCursor, fetchTagSuggestions])
 
   const format = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value)
