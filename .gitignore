@@ -25,3 +25,15 @@ apps/rag-backend/.rag_jobs.*.tmp
 
 # TS incremental build cache — regenerate with `tsc`/`next dev`, per-machine.
 *.tsbuildinfo
+
+# Ad-hoc test media dropped in apps/rag-backend/ during manual RAG pipeline
+# testing (real photos/audio/video/PDFs used to exercise ingestion
+# end-to-end for a specific task, e.g. "test-mountain.jpg", "task4-audio-
+# note.wav") — scratch fixtures, not imported/referenced by anything, safe
+# to accumulate and delete freely between sessions.
+apps/rag-backend/test-*.jpg
+apps/rag-backend/test-*.wav
+apps/rag-backend/test-*.mp4
+apps/rag-backend/test-*.pdf
+apps/rag-backend/task*-*.wav
+apps/rag-backend/task*-*.mp4

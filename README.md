@@ -46,6 +46,14 @@ cd ../..
 pnpm dev           # http://localhost:3000
 ```
 
+> **Image uploads need one more service.** `pnpm dev` only starts the Node
+> workspace packages (web, rag-backend, chat-backend) — it does **not** start
+> the CLIP sidecar (`clip-sidecar/`, a separate Python/FastAPI service),
+> since it isn't part of the pnpm workspace at all. Without it running,
+> everything else works fine; only image uploads in `clip` mode fail (a
+> `503` naming the sidecar). See `apps/rag-backend/README.md` → "Required
+> Running Services" for how to start it.
+
 ## Getting Google OAuth credentials
 1. Go to console.cloud.google.com → APIs & Services → Credentials
 2. Create OAuth 2.0 Client ID (Web application)
