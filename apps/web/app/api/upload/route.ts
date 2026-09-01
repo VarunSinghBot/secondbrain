@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer)
     const mimeType = file.type || "application/octet-stream"
 
-    const result = await uploadToCloudinary(buffer, mimeType, folder)
+    const result = await uploadToCloudinary(buffer, mimeType, folder, file.name)
 
     return NextResponse.json({
       url: result.secure_url,

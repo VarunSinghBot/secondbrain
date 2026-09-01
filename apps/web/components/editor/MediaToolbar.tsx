@@ -3,7 +3,7 @@
 import { useState, useRef, type RefObject } from "react"
 import type { MediaTool } from "@/lib/editor"
 import toast from "react-hot-toast"
-import { Image as ImageIcon, Music, Video, FolderOpen, Link2, UploadCloud, Loader2 } from "lucide-react"
+import { Image as ImageIcon, Music, Video, FileText, FolderOpen, Link2, UploadCloud, Loader2 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 type MediaToolbarButton = {
@@ -38,6 +38,7 @@ export default function MediaToolbar({
     { tool: "image", label: "Image", accept: "image/*", icon: ImageIcon },
     { tool: "audio", label: "Audio", accept: "audio/*", icon: Music },
     { tool: "video", label: "Video", accept: "video/*", icon: Video },
+    { tool: "document", label: "Document", accept: "application/pdf", icon: FileText },
   ]
 
   const currentButton = mediaButtons.find((b) => b.tool === activeMediaTool)

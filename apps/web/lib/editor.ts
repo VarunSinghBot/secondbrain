@@ -1,5 +1,5 @@
-export type ContentType = "article" | "image" | "audio" | "video"
-export type MediaTool = "image" | "audio" | "video"
+export type ContentType = "article" | "image" | "audio" | "video" | "document"
+export type MediaTool = "image" | "audio" | "video" | "document"
 
 export const escapeHtmlAttribute = (value: string) =>
   value
@@ -36,6 +36,10 @@ export const buildMediaHtml = (tool: MediaTool, input: string) => {
 
   if (tool === "audio") {
     return `<audio controls src="${escapeHtmlAttribute(url)}" style="width:100%;margin:8px 0;"></audio>`
+  }
+
+  if (tool === "document") {
+    return `<a href="${escapeHtmlAttribute(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid rgba(128,128,128,0.3);border-radius:8px;margin:8px 0;text-decoration:none;color:inherit;">📄 View document</a>`
   }
 
   const youtubeId = extractYouTubeVideoId(url)

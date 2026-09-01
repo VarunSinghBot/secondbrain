@@ -140,6 +140,8 @@ export default function AddItemPage() {
     if (activeMediaTool === "image") {
       setType("image")
       fetchTagSuggestions(mediaInput, "image")
+    } else if (activeMediaTool === "document") {
+      setType("document")
     }
     setActiveMediaTool(null)
     setMediaInput("")
@@ -153,6 +155,8 @@ export default function AddItemPage() {
     if (tool === "image") {
       setType("image")
       fetchTagSuggestions(url, "image")
+    } else if (tool === "document") {
+      setType("document")
     }
     setActiveMediaTool(null)
     setMediaInput("")
