@@ -384,9 +384,15 @@ export async function askWithRag(
     ? validateContextRelevance(noteHits)
     : { hasSufficientContext: noteHits.length > 0, filteredSources: noteHits }
 
-  // CLIP image hits come from the dedicated rag_images collection and are always included
+  // CLIP image hits come from the dedicated rag_images collection and are always included.
+  // Must pass clipImageMinScore explicitly — validateContextRelevance's default
+  // parameter is minRelevanceScore, which is tuned for Gemini's cosine scale
+  // (~0.44-0.78). CLIP's cross-modal cosine scale is much lower (~0.15-0.25,
+  // confirmed empirically — Task 3), so relying on the default here would
+  // zero out every CLIP hit, correct ones included, once minRelevanceScore
+  // is raised anywhere near a value that's actually useful for text.
   const imageCheck = formattedImageHits.length >= 3
-    ? validateContextRelevance(formattedImageHits)
+    ? validateContextRelevance(formattedImageHits, config.clipImageMinScore)
     : { hasSufficientContext: formattedImageHits.length > 0, filteredSources: formattedImageHits }
 
   // Symmetric relevance balancing:

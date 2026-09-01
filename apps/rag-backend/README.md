@@ -57,7 +57,7 @@
 4. **Cloudinary CDN Integration**: Automatic file persistence and CDN URL generation for image, audio, and video items.
 5. **4-Tier Guardrails Engine**:
    - **Input Guardrail**: Rejects empty strings, queries > 2000 chars, and adversarial prompt injections.
-   - **Context Relevance Guardrail**: Discards search hits below the configured relevance thresholds (`MIN_RELEVANCE_SCORE`, `IMAGE_TAG_SCORE_THRESHOLD`, `IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD`, `MIN_OVERALL_SCORE` — see Environment Configuration).
+   - **Context Relevance Guardrail**: Discards search hits below the configured relevance thresholds (`MIN_RELEVANCE_SCORE`, `CLIP_IMAGE_MIN_SCORE`, `IMAGE_TAG_SCORE_THRESHOLD`, `IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD`, `MIN_OVERALL_SCORE` — see Environment Configuration).
    - **System Prompt Guardrail**: Forces strict context bounding, numeric citations (`[1]`, `[2]`), and Cloudinary links.
    - **Grounding Verification**: Ensures ungrounded fallback when relevance criteria fail.
 
@@ -77,10 +77,11 @@ RAG_BACKEND_PORT=8090
 # Postgres (Prisma — RagDocument indexing-state tracking, see Reindexing below)
 DATABASE_URL="postgresql://user:password@localhost:5432/secondbrain"
 
-# Groq API (LLM answer generation & Whisper ASR)
+# Groq API (LLM answer generation, Whisper ASR & image/frame captioning)
 GROQ_API_KEY="your-groq-api-key"
 GROQ_LLM_MODEL="openai/gpt-oss-120b"
 GROQ_ASR_MODEL="whisper-large-v3"
+GROQ_CAPTION_MODEL="qwen/qwen3.6-27b"
 
 # Gemini API (embeddings — gemini-embedding-001, fixed, not env-overridable)
 GEMINI_API_KEY="your-gemini-api-key"
@@ -109,15 +110,34 @@ LLAMA_CLOUD_API_KEY="your-llama-cloud-api-key"
 ADMIN_SECRET="your-admin-secret"
 
 # Retrieval Relevance Guardrails
-# Carried over unchanged from the values previously hardcoded/documented —
-# NOT re-tuned. They were set against the old hash-based fallback embedding;
-# cosine similarity distributions differ meaningfully between that and real
-# Gemini embeddings, so these need empirical re-tuning now that retrieval
-# runs on real embeddings. That re-tuning has not happened yet.
-MIN_RELEVANCE_SCORE=0.2
-IMAGE_TAG_SCORE_THRESHOLD=0.35
-IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD=0.35
-MIN_OVERALL_SCORE=0.21
+# Empirically re-tuned against real gemini-embedding-001 (text) and CLIP
+# (image) cosine-similarity distributions — a 6-item corpus across every
+# modality, queried with 10 real questions (clear per-modality,
+# deliberately unanswerable, and cross-topic/ambiguous), recording raw
+# unfiltered scores for every hit. See src/lib/config.ts for the full score
+# data and reasoning behind each value. Two things worth knowing before you
+# touch these:
+#   1. Gemini cosine scores for ANY two passages cluster densely
+#      (0.44-0.78) regardless of real topical relevance — these are a
+#      coarse noise filter, not a precision guarantee. A deliberately
+#      unanswerable test query still scored 0.60+ against unrelated notes.
+#   2. CLIP's cross-modal scale (0.15-0.25) is not comparable to Gemini's —
+#      CLIP_IMAGE_MIN_SCORE exists specifically because sharing
+#      MIN_RELEVANCE_SCORE across both used to silently zero out every
+#      CLIP image hit once that value was raised to anything useful for text.
+MIN_RELEVANCE_SCORE=0.5
+CLIP_IMAGE_MIN_SCORE=0.17
+IMAGE_TAG_SCORE_THRESHOLD=0.52
+IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD=0.5
+MIN_OVERALL_SCORE=0.45
+
+# Set true to use CLIP's fixed-vocabulary zero-shot tagging instead of
+# Groq's free-text image captioning (GROQ_CAPTION_MODEL above). Off by
+# default — CLIP's forced choice among a short candidate list produced
+# wrong tags outranking correct ones in a tight score band (e.g. a mountain
+# photo's own "mountain" tag losing to "ocean"/"boat"); kept only for
+# rollback, not recommended.
+USE_CLIP_ZEROSHOT_TAGGING=false
 ```
 
 ---

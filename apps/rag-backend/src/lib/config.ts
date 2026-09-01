@@ -69,36 +69,99 @@ export const config = {
   qdrantVectorSize: Number(getEnv("QDRANT_VECTOR_SIZE") ?? 768),
 
   // ─── RAG retrieval relevance thresholds (askWithRag, services/indexer.ts) ───
-  // Defaults below are carried over unchanged from the values that were
-  // previously hardcoded/documented, NOT re-tuned. They were set against the
-  // old hash-based fallback embedding, and cosine similarity distributions
-  // differ meaningfully between that and Gemini's real embeddings (Task 1),
-  // so these need empirical re-tuning now that retrieval runs on real
-  // embeddings — that re-tuning has not happened yet, do not hand-guess.
+  // Re-tuned empirically (Task 3) against real gemini-embedding-001 and CLIP
+  // cosine-similarity distributions — a 6-item corpus across all modalities
+  // (2 text notes, 1 document-modality note, 1 real photo, 1 real
+  // Whisper-transcribed audio note, 1 real video with CLIP-captioned frames)
+  // queried with 10 real questions (clear per-modality, deliberately
+  // unanswerable, and cross-topic/ambiguous), recording raw unfiltered
+  // scores for every hit. Two findings shaped these numbers:
+  //
+  // 1. gemini-embedding-001 cosine scores for ANY two natural-language
+  //    passages cluster densely in a 0.44–0.78 band regardless of real
+  //    topical relevance — a wildly irrelevant query ("weather in Paris")
+  //    still scored 0.48–0.63 against every unrelated note. There is no
+  //    single cosine cutoff that cleanly separates correct from incorrect
+  //    hits (observed: correct hits 0.5757–0.7775, incorrect hits up to
+  //    0.6849 — the ranges overlap). These thresholds are therefore a
+  //    coarse pre-filter to cut the worst noise before it reaches the LLM,
+  //    not a precision guarantee — final relevance judgment still leans on
+  //    the grounded system prompt instructing the LLM to only cite what's
+  //    actually relevant.
+  // 2. CLIP cross-modal (text query vs image) cosine scores live on a much
+  //    lower, non-comparable scale (observed: 0.15–0.25) than
+  //    gemini-embedding-001's same-modality scale above. minRelevanceScore
+  //    was previously also the default floor applied to raw CLIP
+  //    rag_images hits (validateContextRelevance's default parameter,
+  //    indexer.ts) — sharing one threshold across both was structurally
+  //    broken: a value high enough to filter Gemini-scale noise (~0.5)
+  //    would silently zero out every CLIP image hit, correct ones
+  //    included, since even the best real photo→matching-query score
+  //    observed was 0.2388. Split into a separate clipImageMinScore below
+  //    so retuning one doesn't break the other.
+  //
+  // Full score data: see the Task 3 write-up (not committed — ask if you
+  // want the raw log preserved somewhere).
 
-  // Floor applied to note/text hits and to CLIP image hits via
-  // validateContextRelevance() — hits scoring below this are dropped before
-  // being considered as context. Was config.ts's pre-existing default.
-  minRelevanceScore: Number(getEnv("MIN_RELEVANCE_SCORE") ?? 0.2),
+  // Floor applied to note/text hits (real content: article/audio/video/
+  // document modalities) in the Gemini text collection. Raised from 0.2
+  // (which filtered nothing — every observed hit, relevant or not, scored
+  // above it) to sit just below the lowest real correct-hit score observed
+  // (0.5757), so it drops the bottom of the noise range without excluding
+  // a genuine weak match.
+  minRelevanceScore: Number(getEnv("MIN_RELEVANCE_SCORE") ?? 0.5),
+
+  // Floor applied specifically to raw CLIP image-collection (rag_images)
+  // hits — decoupled from minRelevanceScore (see note above) because CLIP's
+  // cross-modal cosine scale is much lower and not comparable to Gemini's.
+  // Set just below the lowest real correct CLIP hit observed (0.1691) to
+  // preserve recall; at this corpus size correct (0.1691–0.2388) and
+  // incorrect (0.1548–0.2463) CLIP scores still overlap almost entirely, so
+  // this is intentionally permissive — same "coarse pre-filter, let the LLM
+  // judge the rest" reasoning as minRelevanceScore. New in Task 3 — there
+  // was no separate env var for this before.
+  clipImageMinScore: Number(getEnv("CLIP_IMAGE_MIN_SCORE") ?? 0.17),
 
   // Image-tag description chunks live in the text collection with
-  // modality="image". They need their own (lower) floor so they don't
-  // crowd out real notes/audio/video when the query isn't about images.
-  // Was hardcoded as IMAGE_TAG_SCORE_THRESHOLD in indexer.ts.
-  imageTagScoreThreshold: Number(getEnv("IMAGE_TAG_SCORE_THRESHOLD") ?? 0.35),
+  // modality="image"/"video_frame". Previously assumed to score *lower*
+  // than real notes (hence "own lower floor" in the old comment here) —
+  // that assumption predates Task 1's switch from terse CLIP tag lists to
+  // full Groq-generated sentence captions, which embed just as "generically
+  // high" as any other text (observed range 0.44–0.67, overlapping real
+  // notes' range, not below it). Raised from 0.35 to sit just below the
+  // lowest real correct video-frame-caption score observed (0.5498).
+  imageTagScoreThreshold: Number(getEnv("IMAGE_TAG_SCORE_THRESHOLD") ?? 0.52),
 
   // Symmetric relevance balancing: when the top CLIP image score beats the
   // top text score, the query looks image-focused, so text hits are held to
-  // this stricter floor instead of minRelevanceScore. Was hardcoded inline
-  // in indexer.ts's askWithRag (also 0.35, same value as the threshold above
-  // by coincidence — they gate different things).
-  imageFocusedTextScoreThreshold: Number(getEnv("IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD") ?? 0.35),
+  // this stricter floor instead of minRelevanceScore. Task 3 finding: given
+  // CLIP's much lower scale (above), topImageScore beat topTextScore in
+  // ZERO of 10 real test queries, including image-focused ones ("What does
+  // my mountain photo show?" scored topText=0.6457 vs topImage=0.2388) — as
+  // designed, this branch is effectively unreachable with the current
+  // embedding models, so its exact value has little practical effect right
+  // now. Left aligned with minRelevanceScore rather than tuned separately;
+  // fixing the comparison itself (e.g. normalizing scores before comparing,
+  // or comparing rank instead of raw score) is a real design gap but out of
+  // scope for a threshold retune.
+  imageFocusedTextScoreThreshold: Number(getEnv("IMAGE_FOCUSED_TEXT_SCORE_THRESHOLD") ?? 0.5),
 
   // Overall gate: if every retrieved hit (text + image) scores below this,
   // nothing is truly relevant to the query and askWithRag short-circuits
   // with the "no sufficient context" fallback instead of calling the LLM.
-  // Was hardcoded as MIN_OVERALL_SCORE in indexer.ts.
-  minOverallScore: Number(getEnv("MIN_OVERALL_SCORE") ?? 0.21),
+  // Was hardcoded as MIN_OVERALL_SCORE in indexer.ts. Task 3 finding: this
+  // gate is NOT a reliable answerable/unanswerable discriminator at any
+  // value — both deliberately unanswerable test queries ("grandmother's
+  // cookie recipe", "weather in Paris", nothing relevant indexed) still hit
+  // a best score of 0.60–0.63 from Gemini's generic same-domain similarity,
+  // while some genuinely correct-but-weak matches scored as low as 0.5757.
+  // Those ranges overlap, so no single number here can separate them —
+  // raising this only catches the most degenerate zero-signal case (e.g. a
+  // brand-new empty account), not "technically indexed, but not what was
+  // asked." Meaningfully fixing that would need a different mechanism
+  // entirely (e.g. an LLM sufficiency check), which is out of scope for a
+  // threshold retune — flagging as a real limitation, not solving it here.
+  minOverallScore: Number(getEnv("MIN_OVERALL_SCORE") ?? 0.45),
 
   // ─── CLIP zero-shot image/frame tagging (clip-client.ts, clip-sidecar/main.py) ───
   // Same names/defaults as clip-sidecar's own env vars, since the two need to
