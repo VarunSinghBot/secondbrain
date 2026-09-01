@@ -1,5 +1,6 @@
 import { config, requireConfig } from "./config"
 import { ClipSidecarUnavailableError, embedImage, tagImage } from "./clip-client"
+import { captionImage } from "./groq"
 import { embedText } from "./embeddings"
 import { uploadToCloudinary } from "./cloudinary"
 import { upsertChunk, upsertImageVector } from "./qdrant"
@@ -82,31 +83,45 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
       text: extractedText,
     })
   } else {
-    // Mode CLIP: CLIP sidecar vector (512-dim) -> rag_images + Tag description vector (768-dim Gemini) -> rag_text
+    // Mode CLIP: CLIP sidecar vector (512-dim) -> rag_images + Groq caption vector (768-dim Gemini) -> rag_text
     let clipVector: number[]
-    let tags: string[]
+    let tags: string[] = []
+    let caption: string
     try {
-      ;[clipVector, tags] = await Promise.all([
-        embedImage(buffer, mimeType),
-        tagImage(buffer, mimeType).catch(() => []),
-      ])
+      if (config.useClipZeroShotTagging) {
+        // Legacy path (see config.useClipZeroShotTagging) — CLIP's
+        // forced-choice tagging against a fixed vocabulary, kept for
+        // rollback but not the default.
+        ;[clipVector, tags] = await Promise.all([
+          embedImage(buffer, mimeType),
+          tagImage(buffer, mimeType).catch(() => []),
+        ])
+        const titledAs = sourceName ? ` titled "${sourceName}"` : ""
+        caption = tags.length
+          ? `A photo${titledAs} showing ${joinNaturally(tags)}.`
+          : `An uploaded photo${titledAs} with no clearly recognizable subject.`
+      } else {
+        ;[clipVector, caption] = await Promise.all([
+          embedImage(buffer, mimeType),
+          captionImage(buffer, mimeType).catch((err) => {
+            console.warn(`processAndIndexImage: Groq captioning failed for "${fileName}", using generic fallback caption:`, err)
+            return sourceName ? `An uploaded photo titled "${sourceName}".` : "An uploaded photo."
+          }),
+        ])
+      }
     } catch (err) {
       // Re-thrown as the same typed error (not wrapped in a generic Error)
       // so callers can distinguish "CLIP sidecar isn't running" — a 503,
       // the service is just down — from other failures that stay a 500.
+      // (Only embedImage() can still throw here — captionImage() catches
+      // its own failures above and falls back to a generic caption instead
+      // of aborting the whole image index.)
       if (err instanceof ClipSidecarUnavailableError) {
         console.warn(`processAndIndexImage: CLIP sidecar unavailable while indexing "${fileName}"`)
       }
       throw err
     }
 
-    // A flowing sentence, not a labeled field dump — this is what gets
-    // embedded and later shown to the LLM as retrieved context, and the
-    // model tends to mirror the shape of what it's given.
-    const titledAs = sourceName ? ` titled "${sourceName}"` : ""
-    const caption = tags.length
-      ? `A photo${titledAs} showing ${joinNaturally(tags)}.`
-      : `An uploaded photo${titledAs} with no clearly recognizable subject.`
     const tagText = caption
 
     // Upsert 512-dim CLIP vector to rag_images

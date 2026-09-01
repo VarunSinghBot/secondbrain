@@ -5,7 +5,7 @@ import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 
 import { downloadUrl } from "./download"
-import { transcribeAudio } from "./groq"
+import { captionImage, transcribeAudio } from "./groq"
 import { embedImage, tagImage } from "./clip-client"
 import { chunkText, joinNaturally } from "./text"
 import { embedText } from "./embeddings"
@@ -198,15 +198,24 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
         }
         keptFrameEmbeddings.push(clipVec)
 
-        const tags = await tagImage(frameBuffer, "image/jpeg").catch(() => [])
-
-        // A flowing sentence, not a labeled field dump — this is what gets
-        // embedded and later shown to the LLM as retrieved context, and the
-        // model tends to mirror the shape of what it's given.
-        const titledAs = sourceName ? ` from "${sourceName}"` : ""
-        const caption = tags.length
-          ? `A video frame${titledAs} showing ${joinNaturally(tags)}.`
-          : `A video frame${titledAs} with no clearly recognizable subject.`
+        // See config.useClipZeroShotTagging — same Groq-caption-by-default,
+        // CLIP-zero-shot-as-fallback split used for standalone images
+        // (image.ts), applied identically here since frames reuse the same
+        // captioning call.
+        let tags: string[] = []
+        let caption: string
+        if (config.useClipZeroShotTagging) {
+          tags = await tagImage(frameBuffer, "image/jpeg").catch(() => [])
+          const titledAs = sourceName ? ` from "${sourceName}"` : ""
+          caption = tags.length
+            ? `A video frame${titledAs} showing ${joinNaturally(tags)}.`
+            : `A video frame${titledAs} with no clearly recognizable subject.`
+        } else {
+          caption = await captionImage(frameBuffer, "image/jpeg").catch((err) => {
+            console.warn(`processAndIndexVideo: Groq captioning failed for frame ${idx} of "${contentId}", using generic fallback caption:`, err)
+            return sourceName ? `A video frame from "${sourceName}".` : "A video frame."
+          })
+        }
         const tagText = caption
 
         // contentId is the PARENT video's, unmodified (not a derived

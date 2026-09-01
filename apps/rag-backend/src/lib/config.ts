@@ -42,6 +42,27 @@ export const config = {
   answerModel: cleanEnv(getEnv("GROQ_LLM_MODEL"), "openai/gpt-oss-120b"),
   groqLlmModel: cleanEnv(getEnv("GROQ_LLM_MODEL"), "openai/gpt-oss-120b"),
   groqAsrModel: cleanEnv(getEnv("GROQ_ASR_MODEL"), "whisper-large-v3"),
+  // Vision-capable Groq model used to caption images/video frames (image.ts,
+  // video.ts). Confirmed live against Groq's /v1/models catalog and tested
+  // end-to-end with a real image — it's a reasoning model, so callers MUST
+  // pass reasoning_effort: "none" or it burns the whole token budget on a
+  // hidden <think> block and returns empty content (confirmed: with
+  // reasoning enabled and max_tokens=300, 300/300 tokens went to reasoning,
+  // content was "").
+  groqCaptionModel: cleanEnv(getEnv("GROQ_CAPTION_MODEL"), "qwen/qwen3.6-27b"),
+  // Was true (the only option) before real image captioning existed.
+  // CLIP's forced-choice zero-shot tagging (clip-sidecar's fixed
+  // TAG_CANDIDATES vocabulary) produces wrong tags outranking correct ones
+  // in a tight score band — confirmed across multiple real photos (a
+  // mountain photo's own "mountain" tag lost to "ocean"/"boat"). Not a
+  // threshold problem — no amount of retuning clipTagThreshold/clipTagTopN
+  // fixes a ranking failure. Default is now false: image.ts/video.ts caption
+  // via Groq (groqCaptionModel) instead. clip-sidecar's /tag-image endpoint
+  // and clip-client.ts's tagImage() are left in place, not deleted, and this
+  // flag switches back to them if a closed-vocabulary tag list is ever
+  // needed again — CLIP's 512-dim image embedding itself is unaffected
+  // either way, this only controls the tagging/captioning step.
+  useClipZeroShotTagging: (getEnv("USE_CLIP_ZEROSHOT_TAGGING") ?? "false").trim().toLowerCase() === "true",
   cloudinaryCloudName: cleanEnv(getEnv("CLOUDINARY_CLOUD_NAME")),
   cloudinaryApiKey: cleanEnv(getEnv("CLOUDINARY_API_KEY")),
   cloudinaryApiSecret: cleanEnv(getEnv("CLOUDINARY_API_SECRET")),
