@@ -39,6 +39,8 @@ export const config = {
   // llama-3.3-70b-versatile was retired from Groq's catalog (confirmed via a
   // live /openai/v1/models check — no llama chat model remains available;
   // only whisper, gpt-oss, qwen, and groq/compound are offered now).
+  // TODO: answerModel and groqLlmModel both derive from GROQ_LLM_MODEL and
+  // are always identical — one of the two fields is redundant.
   answerModel: cleanEnv(getEnv("GROQ_LLM_MODEL"), "openai/gpt-oss-120b"),
   groqLlmModel: cleanEnv(getEnv("GROQ_LLM_MODEL"), "openai/gpt-oss-120b"),
   groqAsrModel: cleanEnv(getEnv("GROQ_ASR_MODEL"), "whisper-large-v3"),

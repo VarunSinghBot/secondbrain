@@ -1,13 +1,32 @@
 # SecondBrain
 
+Multimodal notes with retrieval-augmented question answering over your own content.
+
+![pnpm](https://img.shields.io/badge/pnpm-11.20.0-F69220?style=flat-square&logo=pnpm&logoColor=white)
+![Turborepo](https://img.shields.io/badge/Turborepo-monorepo-EF4444?style=flat-square&logo=turborepo&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Environment variables](#environment-variables)
+- [Setup & run](#setup--run)
+- [Project structure](#project-structure)
+- [Known Discrepancies & Notes](#known-discrepancies--notes)
+
 SecondBrain is a multimodal, multi-tenant note-taking application. Users capture
 notes as text, images, audio, video, or PDF documents, organize them with tags,
-share them with friends, and — the core of the project — ask natural-language
-questions and get answers grounded in their own content via a retrieval-augmented
+and share them with friends. At its core, users ask natural-language questions
+and get answers grounded in their own content via a retrieval-augmented
 generation (RAG) pipeline, with citations back to the source note. It solves the
-problem of a personal knowledge base becoming write-only: content that's easy to
-save but hard to recall later, especially across formats (a fact buried in a video
-transcript, a diagram in a photo, a paragraph in a PDF).
+problem of a personal knowledge base becoming write-only — content that's easy
+to save but hard to recall later, especially across formats (a fact buried in a
+video transcript, a diagram in a photo, a paragraph in a PDF).
 
 The project is a Turborepo/pnpm monorepo: a Next.js full-stack app for
 auth/CRUD/UI, a dedicated Express service for the RAG pipeline, a small WebSocket
@@ -25,8 +44,8 @@ speculative.
 - **Dashboard** — search by title/body/tag, filter by content type, 4 themes
   (light/dark/sepia/ocean) and 3 layouts (compact/comfortable/spacious), persisted
   per-browser.
-- **Tagging** — manual tags plus AI-suggested tags for images (OCR text +
-  CLIP visual tags + a Groq text call, combined).
+- **Tagging** — manual tags plus AI-suggested tags for images (OCR text, CLIP
+  visual tags, and a Groq text call, combined).
 - **Sharing** — public share links and direct note-to-friend sharing, separate
   from the friends/DM social layer.
 - **Social layer** — friend requests, friendships, direct messages over a
@@ -36,12 +55,12 @@ speculative.
   OCR'd and CLIP-embedded; PDFs are parsed to markdown (LlamaParse) then chunked.
   All chunks are embedded (Gemini) and stored per-user in Qdrant.
 - **Query rewrite before retrieval** — the user's raw question is passed through
-  one small, fast Groq call that fixes spelling/grammar/typos and expands nothing
-  else (no invented specifics, no scope change) before it's embedded for search.
-  The *original* question — not the rewritten one — is still what's sent to
-  answer generation and shown to the user, so answers read naturally. If the
-  rewrite call errors out or times out (3s budget), retrieval silently falls back
-  to the raw query; this can't become a new point of failure for `/ask`.
+  one small, fast Groq call that fixes spelling/grammar/typos and expands
+  nothing else (no invented specifics, no scope change) before it's embedded for
+  search. The *original* question — not the rewritten one — is still what's
+  sent to answer generation and shown to the user, so answers read naturally. If
+  the rewrite call errors out or times out (3s budget), retrieval silently falls
+  back to the raw query; this can't become a new point of failure for `/ask`.
 - **Grounded question answering** — retrieval across both the text and image
   vector collections, per-modality relevance thresholds, a per-modality cap on
   how many hits reach the LLM, and a minimum-overall-score gate that returns "I
@@ -62,7 +81,7 @@ speculative.
 
 ### Monorepo layout
 
-```
+```text
 apps/web            Next.js 15 (App Router) — the full-stack app: UI, auth,
                      CRUD API routes, Prisma (social/content schema), calls
                      out to rag-backend and chat-backend over HTTP/WS.
@@ -87,11 +106,11 @@ captioning); images are captioned and/or OCR'd and CLIP-embedded; PDFs go
 through LlamaParse first. Every text/caption chunk is split into ~1200-character
 pieces with 150 characters of overlap (snapped to word boundaries), embedded via
 Gemini (`gemini-embedding-001`), and written to Qdrant with a `userId` filter.
-Video is the one content type slow enough to be routed to an internal
-background job automatically instead of processed inline (see "Background
-jobs" below — this is a small custom queue, not an external broker).
+Video is the one content type slow enough to be routed through an internal
+background job instead of processed inline (see "Background jobs" below — this
+is a small custom queue, not an external broker).
 
-```
+```text
  INGESTION                                    QUERY (POST /ask)
  ─────────                                    ─────────────────
  raw content                                  raw user question
@@ -109,13 +128,12 @@ jobs" below — this is a small custom queue, not an external broker).
      │                                    embed rewritten query (Gemini + CLIP)
      ▼                                             │
  upsert → Qdrant (rag_text / rag_images)           ▼
-     │                                    Qdrant search (text + image, scoped
-     ▼                                     to userId) — via the internal queue
- (video only) record job status            for slow content, inline otherwise
-   in the file-backed job store                    │
-                                                     ▼
-                                            per-modality relevance filter +
-                                            per-modality cap + overall-score gate
+     │                                    Qdrant search (text + image hits,
+     ▼                                     scoped to userId)
+ (video only: the extraction-through-                │
+  upsert steps above run in the async                ▼
+  job queue instead of inline — status       per-modality relevance filter +
+  via GET /ingest-async/:jobId)              per-modality cap + overall-score gate
                                                      │
                                                      ▼
                                             grounded system prompt (numbered
@@ -144,7 +162,7 @@ chunks and image/video-frame captions, `rag_images` for CLIP image embeddings),
 either Qdrant Cloud or self-hosted via the repo's `docker-compose.yml`.
 PostgreSQL is used separately, purely as a relational tracking store — the
 `RagDocument` table records which content chunks were indexed, under which
-embedding model, and their status — **there is no pgvector extension or vector
+embedding model, and their status. **There is no pgvector extension or vector
 column anywhere in either Prisma schema**; Postgres never stores or searches
 embeddings itself.
 
@@ -210,7 +228,7 @@ services.
 ### apps/web (`apps/web/.env`, from `apps/web/.env.example`)
 
 | Variable | Purpose | Default |
-|---|---|---|
+| :-- | :-- | :-- |
 | `DATABASE_URL` | Postgres connection string | none — required |
 | `AUTH_SECRET` | NextAuth session/JWT signing secret (generate with `npx auth secret`) | none — required |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth login | none — required |
@@ -229,7 +247,7 @@ fewer/no suggested tags without them, it doesn't error.
 ### apps/rag-backend (`apps/rag-backend/.env`, from `apps/rag-backend/.env.example`)
 
 | Variable | Purpose | Default |
-|---|---|---|
+| :-- | :-- | :-- |
 | `RAG_BACKEND_PORT` | Port the Express server listens on | `3000` in code if unset — set this explicitly (`.env.example` uses `8090`) to avoid colliding with apps/web's own port 3000 |
 | `DATABASE_URL` | Postgres connection string (RagDocument tracking only, not vectors) | none — required |
 | `RAG_INTERNAL_SECRET` | Shared secret required on every request from apps/web | none — required, every request is rejected without it |
@@ -265,7 +283,7 @@ No `.env.example` exists for this package — it reads exactly one environment
 variable, directly from `process.env`, with no `.env` file loading at all:
 
 | Variable | Purpose | Default |
-|---|---|---|
+| :-- | :-- | :-- |
 | `CHAT_PORT` | Port the WebSocket server listens on | `8080` in code |
 
 **This needs manual attention.** `apps/web`'s `NEXT_PUBLIC_CHAT_URL` defaults to
@@ -330,7 +348,7 @@ directly.
 
 ## Project structure
 
-```
+```text
 secondbrain/
 ├── apps/
 │   ├── web/              Next.js app (App Router, Prisma, NextAuth)
@@ -358,15 +376,12 @@ secondbrain/
 └── turbo.json            pipeline: build, dev, lint, type-check, db:*, clean
 ```
 
-## TODO / verify
+## Known Discrepancies & Notes
 
-- **This README corrects three assumptions from the original brief that don't
-  match the code**: vector storage is Qdrant, not pgvector; the background job
-  queue is a small custom file-backed implementation, not BullMQ (no Redis
-  dependency exists anywhere in the source); and there is no `packages/ai`
-  provider-abstraction package — `apps/rag-backend/src/lib/embeddings.ts` calls
-  Gemini's API directly. Flagging this explicitly rather than documenting
-  something that isn't there.
+- Vectors live in Qdrant, not pgvector; the async job queue is a small
+  file-backed custom implementation, not BullMQ — there is no Redis dependency;
+  and there is no `packages/ai` provider-abstraction package, embeddings call
+  Gemini directly.
 - `apps/chat-backend` has no `.env.example` and no `.env` loading mechanism at
   all — confirm whether that's intentional before relying on it in a non-dev
   environment (e.g. process manager / container env injection instead of a
@@ -376,6 +391,3 @@ secondbrain/
   from the `uvicorn ... --port 8001` command in the Dockerfile/README
   instructions. Not a functional issue at the current fixed port, but worth
   knowing if that port ever needs to change via env var.
-- `config.ts` defines both `answerModel` and `groqLlmModel` from the same
-  `GROQ_LLM_MODEL` env var — one appears redundant; not resolved here since it
-  doesn't affect behavior or documentation accuracy.
