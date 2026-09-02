@@ -36,3 +36,12 @@ overrides:
   "@hono/node-server": 1.19.15
   sharp: 0.35.0
   deepmerge-ts: 8.0.0
+  # GHSA-c83g-rgw3-j3cx / GHSA-73wf-gq98-2v4g (browserslist, high) and
+  # GHSA-3f6p-5ww8-9rcr (mysql2, high) — confirmed via live pnpm audit.
+  # browserslist comes transitively via autoprefixer (web's CSS build
+  # tooling); mysql2 comes transitively via prisma bundling multi-driver
+  # support this app never uses (Postgres-only). Neither is a direct
+  # dependency of anything here, hence the override rather than a normal
+  # version bump.
+  browserslist: 4.28.7
+  mysql2: 3.22.0
