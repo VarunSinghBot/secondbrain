@@ -39,6 +39,33 @@ async function extractTextFromImage(imageUrl: string): Promise<string> {
   }
 }
 
+// The real visual signal: rag-backend's CLIP sidecar classifies the actual
+// pixels, so it's the only source here that can tag a photo with no visible
+// text (e.g. a picture of cats with a generic filename) — OCR and the Groq
+// text prompt below have nothing to go on in that case.
+async function suggestTagsFromClip(imageUrl: string): Promise<string[]> {
+  const backendUrl = process.env.RAG_BACKEND_URL
+  if (!backendUrl) return []
+
+  try {
+    const res = await fetch(`${backendUrl.replace(/\/$/, "")}/tag-image`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": process.env.RAG_INTERNAL_SECRET ?? "",
+      },
+      body: JSON.stringify({ imageUrl }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
+    if (!res.ok) return []
+    const data = (await res.json()) as { tags?: string[] }
+    return data.tags ?? []
+  } catch (err) {
+    console.warn("CLIP tag suggestion warning (treating as no tags found):", err)
+    return []
+  }
+}
+
 async function generateTagsWithGroq(imageText: string, title?: string, imageUrl?: string): Promise<string[]> {
   const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) return []
@@ -113,8 +140,16 @@ export async function POST(req: NextRequest) {
     suggestionsSet.add("image")
 
     let extractedText = ""
+    let clipTags: string[] = []
     if (imageUrl) {
-      extractedText = await extractTextFromImage(imageUrl)
+      ;[extractedText, clipTags] = await Promise.all([
+        extractTextFromImage(imageUrl),
+        suggestTagsFromClip(imageUrl),
+      ])
+    }
+
+    for (const tag of clipTags) {
+      suggestionsSet.add(tag.toLowerCase())
     }
 
     // Process image text & visual metadata with Groq LLaMA-3
@@ -123,15 +158,19 @@ export async function POST(req: NextRequest) {
       suggestionsSet.add(tag)
     }
 
-    // Additional keyword fallbacks from title, body, & filename
+    // Additional keyword fallbacks from title, body, & filename.
+    // Word-boundary matching, not substring — plain .includes() was matching
+    // "art" inside "start"/"smart"/"party", "cat" inside "category"/"vacation",
+    // "dog" inside "hotdog", etc., which made the suggestions wildly inaccurate.
     const combinedInfo = `${imageUrl ?? ""} ${title ?? ""} ${body ?? ""} ${extractedText}`.toLowerCase()
-    if (combinedInfo.includes("dog")) suggestionsSet.add("dog")
-    if (combinedInfo.includes("cat")) suggestionsSet.add("cat")
-    if (combinedInfo.includes("picture") || combinedInfo.includes("photo")) suggestionsSet.add("picture")
-    if (combinedInfo.includes("project")) suggestionsSet.add("project")
-    if (combinedInfo.includes("design")) suggestionsSet.add("design")
-    if (combinedInfo.includes("diagram")) suggestionsSet.add("diagram")
-    if (combinedInfo.includes("art")) suggestionsSet.add("art")
+    const hasWord = (word: string) => new RegExp(`\\b${word}\\b`).test(combinedInfo)
+    if (hasWord("dog")) suggestionsSet.add("dog")
+    if (hasWord("cat")) suggestionsSet.add("cat")
+    if (hasWord("picture") || hasWord("photo")) suggestionsSet.add("picture")
+    if (hasWord("project")) suggestionsSet.add("project")
+    if (hasWord("design")) suggestionsSet.add("design")
+    if (hasWord("diagram")) suggestionsSet.add("diagram")
+    if (hasWord("art")) suggestionsSet.add("art")
 
     if (suggestionsSet.size <= 1) {
       suggestionsSet.add("picture")

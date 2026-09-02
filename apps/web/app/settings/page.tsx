@@ -51,6 +51,7 @@ export default function SettingsPage() {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("folder", "secondbrain/avatars")
+      formData.append("mediaType", "avatar")
 
       const res = await fetch("/api/upload", {
         method: "POST",
@@ -87,7 +88,7 @@ export default function SettingsPage() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden transition-colors duration-300" style={{ background: "var(--bg-primary)" }}>
-      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="w-0 md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <Toaster position="bottom-right" reverseOrder />
 
       <div className="flex-1 overflow-y-auto page-enter">

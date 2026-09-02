@@ -172,6 +172,18 @@ export default function Content({ filterType, searchQuery }: ContentProps) {
                         return e ? <iframe src={e} className="w-full aspect-video" allowFullScreen title={item.title} /> : <video src={item.mediaUrl} controls className="w-full h-32" />
                       })()}
                       {item.type === "audio" && <audio src={item.mediaUrl} controls className="w-full h-10" />}
+                      {item.type === "document" && (
+                        <a
+                          href={item.mediaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full h-24 flex items-center justify-center gap-2 hover:opacity-80 transition-opacity"
+                          style={{ background: "var(--input-bg)" }}>
+                          <FileText className="w-6 h-6" style={{ color }} strokeWidth={2} />
+                          <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>View PDF</span>
+                        </a>
+                      )}
                     </div>
                   )}
 

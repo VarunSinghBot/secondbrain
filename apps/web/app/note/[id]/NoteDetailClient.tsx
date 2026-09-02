@@ -24,8 +24,9 @@ interface Comment {
 interface Friend { id: string; name: string | null; email: string | null }
 
 export default function NoteDetailClient({ note, userId }: { note: ContentItem & { createdAt: string }; userId: string }) {
-  const router = useRouter()
-  const color  = TYPE_COLOR[note.type] ?? "#e1434b"
+  const router  = useRouter()
+  const color   = TYPE_COLOR[note.type] ?? "#e1434b"
+  const isOwner = note.authorId === userId
 
   const [delWarn,       setDelWarn]       = useState(false)
   const [showShare,     setShowShare]     = useState(false)
@@ -130,7 +131,7 @@ export default function NoteDetailClient({ note, userId }: { note: ContentItem &
   return (
     <div className="h-dvh w-dvw flex overflow-hidden" style={{ background: "var(--bg-primary)" }}>
       <Toaster position="bottom-right" reverseOrder />
-      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="w-0 md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <div className="flex-1 overflow-y-auto page-enter">
 
         {/* Top bar */}
@@ -142,8 +143,12 @@ export default function NoteDetailClient({ note, userId }: { note: ContentItem &
             <button onClick={() => setShowShare((p) => !p)} className="px-4 py-1.5 text-sm font-medium rounded-full border transition-all hover:shadow flex items-center gap-1.5" style={{ borderColor: "#6366f1", color: "#6366f1" }}>
               <Share2 className="w-3.5 h-3.5" /> Share
             </button>
-            <button onClick={() => router.push(`/addItem?id=${note.id}`)} className="px-4 py-1.5 text-sm font-medium rounded-full border transition-all hover:shadow" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Edit</button>
-            <button onClick={() => setDelWarn(true)} className="px-4 py-1.5 text-sm font-medium text-white rounded-full transition-all hover:shadow" style={{ background: "#ef4444" }}>Delete</button>
+            {isOwner && (
+              <button onClick={() => router.push(`/addItem?id=${note.id}`)} className="px-4 py-1.5 text-sm font-medium rounded-full border transition-all hover:shadow" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Edit</button>
+            )}
+            {isOwner && (
+              <button onClick={() => setDelWarn(true)} className="px-4 py-1.5 text-sm font-medium text-white rounded-full transition-all hover:shadow" style={{ background: "#ef4444" }}>Delete</button>
+            )}
           </div>
         </div>
 

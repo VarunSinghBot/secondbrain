@@ -5,9 +5,15 @@ type Layout = "compact" | "comfortable" | "spacious"
 
 interface ThemeState { theme: Theme; layout: Layout }
 
+// Server and the client's first render both need this exact same, static
+// value — reading localStorage here (even guarded by `typeof window`)
+// makes the server render "light"/"comfortable" while the client's first
+// render already sees the real stored preference, a classic hydration
+// mismatch. The real value is applied after mount instead, via
+// hydrateTheme() from ThemeProvider's effect — see there for why.
 const initialState: ThemeState = {
-  theme:  (typeof window !== "undefined" ? (localStorage.getItem("sb_theme") as Theme)  : null) ?? "light",
-  layout: (typeof window !== "undefined" ? (localStorage.getItem("sb_layout") as Layout) : null) ?? "comfortable",
+  theme:  "light",
+  layout: "comfortable",
 }
 
 const themeSlice = createSlice({
@@ -22,8 +28,15 @@ const themeSlice = createSlice({
       state.layout = action.payload
       if (typeof window !== "undefined") localStorage.setItem("sb_layout", action.payload)
     },
+    // Client-only, dispatched once after mount (never during SSR or the
+    // client's first render) to bring in whatever was actually persisted,
+    // without ever making the first render disagree with the server's.
+    hydrateTheme(state, action: PayloadAction<Partial<ThemeState>>) {
+      if (action.payload.theme)  state.theme  = action.payload.theme
+      if (action.payload.layout) state.layout = action.payload.layout
+    },
   },
 })
 
-export const { setTheme, setLayout } = themeSlice.actions
+export const { setTheme, setLayout, hydrateTheme } = themeSlice.actions
 export default themeSlice.reducer

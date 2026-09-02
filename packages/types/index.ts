@@ -1,4 +1,4 @@
-export type ContentType = "article" | "video" | "audio" | "image";
+export type ContentType = "article" | "video" | "audio" | "image" | "document";
 
 export type RagSourceType = "article" | "document" | "audio" | "video" | "image" | "shared-note" | "message";
 

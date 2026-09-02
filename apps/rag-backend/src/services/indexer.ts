@@ -4,7 +4,7 @@ import type { RagIndexRequest, RagReindexContentItem } from "@secondbrain/types"
 
 import { config } from "../lib/config"
 import { embedText } from "../lib/embeddings"
-import { generateGroqAnswer, transcribeAudio } from "../lib/groq"
+import { generateGroqAnswer, rewriteQueryForRetrieval, transcribeAudio } from "../lib/groq"
 import { processAndIndexImage } from "../lib/image"
 import { processAndIndexVideo } from "../lib/video"
 import { embedTextClip } from "../lib/clip-client"
@@ -303,6 +303,9 @@ export async function indexContent(payload: RagIndexRequest): Promise<IndexerChu
 
 /**
  * Performs parallel cross-modal RAG retrieval and answers user query with Groq LLM (config.groqLlmModel).
+ * Retrieval itself runs against a query-rewritten form of the question (see
+ * rewriteQueryForRetrieval, config.groqQueryRewriteModel) — answer generation
+ * and the returned answer still use the original, unrewritten query.
  */
 export async function askWithRag(
   userId: string,
@@ -314,9 +317,19 @@ export async function askWithRag(
     throw new Error(queryCheck.reason ?? "Invalid user query")
   }
 
+  // Retrieval-only reformulation: expands vague pronouns, fixes typos, makes
+  // an implicit ask explicit. The original `query` (not this) is still what
+  // goes to answer generation below, so the final answer reads naturally
+  // rather than as a reply to a robotic reformulation. Never throws/blocks —
+  // see rewriteQueryForRetrieval for the fallback-to-raw-query behavior.
+  const retrievalQuery = await rewriteQueryForRetrieval(query)
+  if (retrievalQuery !== query) {
+    console.log(`askWithRag: rewrote query for retrieval — "${query}" -> "${retrievalQuery}"`)
+  }
+
   const [groqTextVector, clipTextVector] = await Promise.all([
-    embedText(query, "RETRIEVAL_QUERY"),
-    embedTextClip(query).catch(() => [] as number[]),
+    embedText(retrievalQuery, "RETRIEVAL_QUERY"),
+    embedTextClip(retrievalQuery).catch(() => [] as number[]),
   ])
 
   // Fetch more text hits so notes aren't buried behind image tag chunks
@@ -354,31 +367,44 @@ export async function askWithRag(
     text: String(h.payload?.text ?? ""),
     score: h.score,
     timestampSeconds: typeof h.payload?.timestampSeconds === "number" ? h.payload.timestampSeconds : null,
+    isFallback: Boolean(h.payload?.isFallbackCaption),
   }))
 
   // Split: real content (notes, audio, video, pdf) vs tag-description chunks
   // stored in rag_text. Image and video-frame tag chunks (modality "image" /
   // "video_frame") get the same, lower floor so they don't crowd out real
-  // notes/audio when the query isn't about visual content.
+  // notes/audio when the query isn't about visual content. Fallback captions
+  // (Groq rate-limited, generic "A video frame from ..." text) are dropped
+  // outright here rather than just scored low — they're often short/generic
+  // enough to score competitively on vector similarity despite carrying no
+  // real information, which otherwise lets them fill the per-modality cap
+  // below and crowd out the one real caption for the same content.
   const noteHits = allTextHits.filter((h) =>
-    (h.modality !== "image" && h.modality !== "video_frame") || h.score >= config.imageTagScoreThreshold
+    !h.isFallback && ((h.modality !== "image" && h.modality !== "video_frame") || h.score >= config.imageTagScoreThreshold)
   )
 
-  const formattedImageHits: RAGSourceContext[] = imageHits.map((h) => ({
-    contentId: String(h.payload?.contentId ?? "unknown"),
-    userId: String(h.payload?.userId ?? userId),
-    sourceType: String(h.payload?.sourceType ?? "image"),
-    sourceUrl: (h.payload?.sourceUrl as string) || null,
-    sourceName: (h.payload?.sourceName as string) || null,
-    cloudinaryUrl: (h.payload?.cloudinaryUrl as string) || null,
-    modality: String(h.payload?.modality ?? "image"),
-    tags: Array.isArray(h.payload?.tags) ? (h.payload.tags as string[]) : [],
-    caption: String(h.payload?.caption ?? ""),
-    chunkIndex: Number(h.payload?.chunkIndex ?? 0),
-    text: String(h.payload?.text ?? h.payload?.caption ?? ""),
-    score: h.score,
-    timestampSeconds: typeof h.payload?.timestampSeconds === "number" ? h.payload.timestampSeconds : null,
-  }))
+  const formattedImageHits: RAGSourceContext[] = imageHits
+    .map((h) => ({
+      contentId: String(h.payload?.contentId ?? "unknown"),
+      userId: String(h.payload?.userId ?? userId),
+      sourceType: String(h.payload?.sourceType ?? "image"),
+      sourceUrl: (h.payload?.sourceUrl as string) || null,
+      sourceName: (h.payload?.sourceName as string) || null,
+      cloudinaryUrl: (h.payload?.cloudinaryUrl as string) || null,
+      modality: String(h.payload?.modality ?? "image"),
+      tags: Array.isArray(h.payload?.tags) ? (h.payload.tags as string[]) : [],
+      caption: String(h.payload?.caption ?? ""),
+      chunkIndex: Number(h.payload?.chunkIndex ?? 0),
+      text: String(h.payload?.text ?? h.payload?.caption ?? ""),
+      score: h.score,
+      timestampSeconds: typeof h.payload?.timestampSeconds === "number" ? h.payload.timestampSeconds : null,
+      isFallback: Boolean(h.payload?.isFallbackCaption),
+    }))
+    // Same reasoning as noteHits above — a generic fallback caption's CLIP
+    // vector can still score well on pure visual similarity even though its
+    // paired text is uninformative, so it's dropped here too rather than
+    // left to compete for one of the (only 3-wide) image slots.
+    .filter((h) => !h.isFallback)
 
   const textCheck = noteHits.length >= 3
     ? validateContextRelevance(noteHits)

@@ -30,11 +30,14 @@ export async function parseDocumentFromUrl(sourceUrl: string): Promise<string> {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
+    // "expand" is NOT accepted here — confirmed live, LlamaParse's job-
+    // creation endpoint rejects it with 422 "extra_forbidden". It's only
+    // valid as a query param on the result-polling GET below, which is
+    // where markdown_full/text_full actually get requested.
     body: JSON.stringify({
       source_url: sourceUrl,
       tier: "cost_effective",
       version: "latest",
-      expand: ["markdown_full"],
     }),
   })
 

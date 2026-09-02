@@ -22,7 +22,7 @@ export default function MainPage() {
   return (
     <div className="h-full w-full flex overflow-hidden transition-colors duration-300" style={{ background: "var(--bg-primary)" }}>
       {/* Sidebar */}
-      <div className="w-[220px] flex-shrink-0 h-full"><SideBar onFilter={setFilterType} /></div>
+      <div className="w-0 md:w-[220px] flex-shrink-0 h-full"><SideBar onFilter={setFilterType} /></div>
 
       {/* Main content */}
       <div className="flex-1 h-full flex flex-col overflow-hidden">

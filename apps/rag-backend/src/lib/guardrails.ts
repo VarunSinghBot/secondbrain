@@ -17,6 +17,11 @@ export interface RAGSourceContext {
   // Set for modality "video_frame" once Task 4 lands — where in the source
   // video (in seconds) this frame was sampled from.
   timestampSeconds?: number | null
+  // True when this chunk's text/caption is the generic Groq-rate-limit
+  // fallback rather than a real description — askWithRag() drops these
+  // before scoring so a generic caption can't outrank and crowd out a real
+  // one for the same content.
+  isFallback?: boolean
 }
 
 export interface GuardrailValidationResult {

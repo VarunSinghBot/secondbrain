@@ -59,6 +59,7 @@ export default function EditorBody({
         const formData = new FormData()
         formData.append("file", file)
         formData.append("folder", `secondbrain/${mediaTool}s`)
+        formData.append("mediaType", mediaTool)
 
         const res = await fetch("/api/upload", {
           method: "POST",

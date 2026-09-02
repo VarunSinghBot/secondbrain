@@ -54,6 +54,7 @@ export default function MediaToolbar({
       const formData = new FormData()
       formData.append("file", file)
       formData.append("folder", `secondbrain/${activeMediaTool}s`)
+      formData.append("mediaType", activeMediaTool)
 
       const res = await fetch("/api/upload", {
         method: "POST",

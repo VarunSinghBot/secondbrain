@@ -51,7 +51,7 @@ export default function DMPage() {
   // WebSocket for real-time
   useEffect(() => {
     if (!session?.user?.id || !friendId) return
-    const chatUrl = process.env.NEXT_PUBLIC_CHAT_URL?.replace("http", "ws").replace(":5174", ":8080") ?? "ws://localhost:8080"
+    const chatUrl = process.env.NEXT_PUBLIC_CHAT_URL?.replace("http", "ws") ?? "ws://localhost:8080"
     const ws      = new WebSocket(chatUrl)
     wsRef.current = ws
 
@@ -112,7 +112,7 @@ export default function DMPage() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden" style={{ background: "var(--bg-primary)" }}>
-      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="w-0 md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center gap-3 px-6 py-4 border-b" style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}>

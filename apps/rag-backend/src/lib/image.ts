@@ -87,6 +87,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
     let clipVector: number[]
     let tags: string[] = []
     let caption: string
+    let usedFallbackCaption = false
     try {
       if (config.useClipZeroShotTagging) {
         // Legacy path (see config.useClipZeroShotTagging) — CLIP's
@@ -104,7 +105,12 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
         ;[clipVector, caption] = await Promise.all([
           embedImage(buffer, mimeType),
           captionImage(buffer, mimeType).catch((err) => {
-            console.warn(`processAndIndexImage: Groq captioning failed for "${fileName}", using generic fallback caption:`, err)
+            usedFallbackCaption = true
+            console.warn(
+              `processAndIndexImage: Groq captioning failed for "${fileName}" even after retries — ` +
+              `using generic fallback caption (tagged isFallbackCaption, excluded from /ask retrieval):`,
+              err
+            )
             return sourceName ? `An uploaded photo titled "${sourceName}".` : "An uploaded photo."
           }),
         ])
@@ -139,6 +145,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
       caption,
       chunkIndex: 0,
       text: tagText,
+      isFallbackCaption: usedFallbackCaption,
     })
 
     // Upsert 768-dim Gemini text description vector to rag_text
@@ -157,6 +164,7 @@ export async function processAndIndexImage(options: IngestImageOptions): Promise
       caption,
       chunkIndex: 0,
       text: tagText,
+      isFallbackCaption: usedFallbackCaption,
     })
   }
 

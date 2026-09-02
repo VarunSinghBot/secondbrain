@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import toast, { Toaster } from "react-hot-toast"
 import {
   Brain, Home, Share2, Link2, Settings, ChevronDown, ChevronUp,
-  FileText, Image as ImageIcon, Music, Video, MessageCircle, LogOut,
+  FileText, Image as ImageIcon, Music, Video, File, MessageCircle, LogOut,
   Menu, X, UserPlus, Check as CheckIcon,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -24,9 +24,10 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
   const [addLoading,    setAddLoading]    = useState(false)
   const [showFilters,   setShowFilters]   = useState(false)
   const [mobileOpen,    setMobileOpen]    = useState(false)
+  const [friendsLoading, setFriendsLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/friends").then((r) => r.json()).then((d) => Array.isArray(d) && setFriends(d)).catch(() => {})
+    fetch("/api/friends").then((r) => r.json()).then((d) => Array.isArray(d) && setFriends(d)).catch(() => {}).finally(() => setFriendsLoading(false))
     fetch("/api/friends/requests").then((r) => r.json()).then((d) => Array.isArray(d) && setRequests(d)).catch(() => {})
   }, [])
 
@@ -80,10 +81,11 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
   )
 
   const filters: { label: string; type: string; icon: LucideIcon }[] = [
-    { label: "Article", type: "article", icon: FileText },
-    { label: "Image",   type: "image",   icon: ImageIcon },
-    { label: "Audio",   type: "audio",   icon: Music },
-    { label: "Video",   type: "video",   icon: Video },
+    { label: "Article",  type: "article",  icon: FileText },
+    { label: "Image",    type: "image",    icon: ImageIcon },
+    { label: "Audio",    type: "audio",    icon: Music },
+    { label: "Video",    type: "video",    icon: Video },
+    { label: "Document", type: "document", icon: File },
   ]
 
   return (
@@ -173,7 +175,7 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
         {/* Friends */}
         <div className="px-3 mb-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Friends ({friends.length})</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Friends {friendsLoading ? "" : `(${friends.length})`}</p>
             <button onClick={() => setShowAddFriend((p) => !p)} className="text-xs pl-1.5 pr-2 py-0.5 rounded text-white font-medium flex items-center gap-1" style={{ background: "var(--accent)" }}>
               <UserPlus className="w-3 h-3" /> Add
             </button>
@@ -191,7 +193,12 @@ export default function SideBar({ onFilter }: { onFilter?: (t: string | null) =>
           )}
 
           <div className="flex flex-col gap-1">
-            {friends.length === 0 ? (
+            {friendsLoading ? (
+              <>
+                <div className="h-9 rounded-lg animate-pulse" style={{ background: "var(--input-bg)" }} />
+                <div className="h-9 rounded-lg animate-pulse" style={{ background: "var(--input-bg)" }} />
+              </>
+            ) : friends.length === 0 ? (
               <p className="text-xs py-2 text-center" style={{ color: "var(--text-muted)" }}>No friends yet</p>
             ) : friends.map((f) => (
               <button key={f.id} onClick={() => { router.push(`/dm/${f.id}`); setMobileOpen(false) }}

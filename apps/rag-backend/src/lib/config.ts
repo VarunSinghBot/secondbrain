@@ -50,6 +50,14 @@ export const config = {
   // reasoning enabled and max_tokens=300, 300/300 tokens went to reasoning,
   // content was "").
   groqCaptionModel: cleanEnv(getEnv("GROQ_CAPTION_MODEL"), "qwen/qwen3.6-27b"),
+  // Small/fast Groq model used only to reformulate the raw user query before
+  // embedding/retrieval (see rewriteQueryForRetrieval, groq.ts) — this runs
+  // on the critical path of every askWithRag() call, so it's deliberately
+  // the smallest general text model in Groq's current catalog rather than
+  // groqLlmModel. Confirmed live: gpt-oss-20b requires reasoning_effort
+  // "low" (unlike qwen3.6-27b, it rejects "none" outright), and "low" still
+  // returns in ~0.4-0.6s with the actual rewritten text, not just reasoning.
+  groqQueryRewriteModel: cleanEnv(getEnv("GROQ_QUERY_REWRITE_MODEL"), "openai/gpt-oss-20b"),
   // Was true (the only option) before real image captioning existed.
   // CLIP's forced-choice zero-shot tagging (clip-sidecar's fixed
   // TAG_CANDIDATES vocabulary) produces wrong tags outranking correct ones

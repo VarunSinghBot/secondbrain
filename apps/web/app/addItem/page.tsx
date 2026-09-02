@@ -28,6 +28,7 @@ export default function AddItemPage() {
   const [wordCount, setWordCount] = useState(0)
   const [activeMediaTool, setActiveMediaTool] = useState<MediaTool | null>(null)
   const [mediaInput, setMediaInput] = useState("")
+  const [mediaUrl, setMediaUrl] = useState("")
 
   const bodyRef = useRef<HTMLDivElement>(null)
   const mediaInputRef = useRef<HTMLInputElement>(null)
@@ -41,6 +42,7 @@ export default function AddItemPage() {
       const note = await res.json()
       setTitle(note.title)
       setType(note.type)
+      setMediaUrl(note.mediaUrl ?? "")
       setTags(note.tags?.map((t: { tagName: string }) => t.tagName) ?? [])
       if (bodyRef.current) bodyRef.current.innerHTML = note.body
       countWords()
@@ -140,9 +142,14 @@ export default function AddItemPage() {
     if (activeMediaTool === "image") {
       setType("image")
       fetchTagSuggestions(mediaInput, "image")
+    } else if (activeMediaTool === "video") {
+      setType("video")
+    } else if (activeMediaTool === "audio") {
+      setType("audio")
     } else if (activeMediaTool === "document") {
       setType("document")
     }
+    setMediaUrl(mediaInput)
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
@@ -155,9 +162,14 @@ export default function AddItemPage() {
     if (tool === "image") {
       setType("image")
       fetchTagSuggestions(url, "image")
+    } else if (tool === "video") {
+      setType("video")
+    } else if (tool === "audio") {
+      setType("audio")
     } else if (tool === "document") {
       setType("document")
     }
+    setMediaUrl(url)
     setActiveMediaTool(null)
     setMediaInput("")
     bodyRef.current?.focus()
@@ -187,7 +199,7 @@ export default function AddItemPage() {
     setSaving(true); setError("")
 
     const payload = {
-      title, body, type, tags,
+      title, body, type, tags, mediaUrl: mediaUrl || undefined,
     }
     const url    = editId ? `/api/content/${editId}` : "/api/content"
     const method = editId ? "PUT" : "POST"
@@ -225,7 +237,7 @@ export default function AddItemPage() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden" style={{ background: "var(--bg-primary)" }}>
-      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="w-0 md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <Toaster position="bottom-right" reverseOrder />
 
       <div className="flex-1 flex flex-col overflow-hidden">

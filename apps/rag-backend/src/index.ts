@@ -7,7 +7,8 @@ import type { RagAskRequest, RagAskResponse, RagIndexRequest, RagReindexBatchReq
 import { askWithRag, indexContent, isVideoContent, reindexUserContent } from "./services/indexer"
 import { addJob, getJob, startWorker } from "./worker/queue"
 import { embedText } from "./lib/embeddings"
-import { ClipSidecarUnavailableError, embedTextClip } from "./lib/clip-client"
+import { ClipSidecarUnavailableError, embedTextClip, tagImage } from "./lib/clip-client"
+import { downloadUrl } from "./lib/download"
 import { searchSimilar, searchSimilarImages } from "./lib/qdrant"
 import { generateGroqAnswer } from "./lib/groq"
 import { buildGroundedSystemPrompt, citedSourceIndices, labelForSource, stripCitationMarkers, validateUserQuery } from "./lib/guardrails"
@@ -251,6 +252,32 @@ app.post("/delete", requireInternalSecret, async (req: Request, res: Response) =
   } catch (error) {
     return res.status(500).json({
       error: error instanceof Error ? error.message : "Delete failed",
+    })
+  }
+})
+
+// Runs the actual CLIP zero-shot classifier over the image's pixels, unlike
+// apps/web's /api/tags/suggest which — before this endpoint existed — only
+// had OCR text and the filename/title to go on, so a photo with no visible
+// text and a generic filename (e.g. a cat photo) got no real visual tags.
+app.post("/tag-image", requireInternalSecret, async (req: Request, res: Response) => {
+  const { imageUrl } = req.body ?? {}
+
+  if (!imageUrl || typeof imageUrl !== "string") {
+    return res.status(400).json({ error: "imageUrl is required" })
+  }
+
+  try {
+    const { buffer, contentType } = await downloadUrl(imageUrl)
+    const tags = await tagImage(buffer, contentType || "image/jpeg")
+    return res.json({ tags })
+  } catch (error) {
+    if (error instanceof ClipSidecarUnavailableError) {
+      return res.status(503).json({ error: error.message, tags: [] })
+    }
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Tagging failed",
+      tags: [],
     })
   }
 })

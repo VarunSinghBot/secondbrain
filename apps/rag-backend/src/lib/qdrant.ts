@@ -17,6 +17,12 @@ export interface QdrantPayload {
   // Only set for modality "video_frame" — where in the source video (in
   // seconds) this frame was sampled from.
   timestampSeconds?: number | null
+  // True when `caption`/`text` is the generic "A photo/video frame..."
+  // fallback (captionImage() exhausted its retries) rather than a real
+  // description. askWithRag() excludes these from retrieval entirely — a
+  // generic caption competing on a vector-similarity score can otherwise
+  // outrank and crowd out the one real caption for the same content.
+  isFallbackCaption?: boolean | null
 }
 
 export async function qdrantRequest(path: string, init?: RequestInit): Promise<Response> {

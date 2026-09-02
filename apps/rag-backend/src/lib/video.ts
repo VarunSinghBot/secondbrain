@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
+import { setTimeout as delay } from "node:timers/promises"
 
 import { downloadUrl } from "./download"
 import { captionImage, transcribeAudio } from "./groq"
@@ -12,6 +13,13 @@ import { embedText } from "./embeddings"
 import { upsertChunk, upsertImageVector } from "./qdrant"
 import { uploadToCloudinary } from "./cloudinary"
 import { config } from "./config"
+
+// A small gap between per-frame Groq captioning calls. captionImage() itself
+// now retries with backoff on a 429, but qwen3.6-27b's TPM cap is easy to
+// cross partway through a single video's frame batch when calls fire
+// back-to-back (~2100-2300 tokens/caption) — spacing them out reduces how
+// often that retry path is even needed for a typical frame count.
+const FRAME_CAPTION_DELAY_MS = 1500
 
 async function runFfmpeg(args: string[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -204,6 +212,7 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
         // captioning call.
         let tags: string[] = []
         let caption: string
+        let usedFallbackCaption = false
         if (config.useClipZeroShotTagging) {
           tags = await tagImage(frameBuffer, "image/jpeg").catch(() => [])
           const titledAs = sourceName ? ` from "${sourceName}"` : ""
@@ -211,8 +220,15 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
             ? `A video frame${titledAs} showing ${joinNaturally(tags)}.`
             : `A video frame${titledAs} with no clearly recognizable subject.`
         } else {
+          if (idx > 0) await delay(FRAME_CAPTION_DELAY_MS)
           caption = await captionImage(frameBuffer, "image/jpeg").catch((err) => {
-            console.warn(`processAndIndexVideo: Groq captioning failed for frame ${idx} of "${contentId}", using generic fallback caption:`, err)
+            usedFallbackCaption = true
+            console.warn(
+              `processAndIndexVideo: Groq captioning failed for frame ${idx} of "${contentId}" ` +
+              `even after retries — using generic fallback caption (tagged isFallbackCaption, ` +
+              `excluded from /ask retrieval so it can't outrank a real caption elsewhere in this video):`,
+              err
+            )
             return sourceName ? `A video frame from "${sourceName}".` : "A video frame."
           })
         }
@@ -239,6 +255,7 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
           chunkIndex: idx,
           text: tagText,
           timestampSeconds,
+          isFallbackCaption: usedFallbackCaption,
         })
 
         const textVec = await embedText(tagText, "RETRIEVAL_DOCUMENT")
@@ -256,6 +273,7 @@ export async function processAndIndexVideo(options: IngestVideoOptions): Promise
           chunkIndex: idx,
           timestampSeconds,
           text: tagText,
+          isFallbackCaption: usedFallbackCaption,
         })
 
         indexedFrames++

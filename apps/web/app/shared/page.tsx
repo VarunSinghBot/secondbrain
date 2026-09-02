@@ -6,12 +6,12 @@ import type { RootState } from "@/store/store"
 import SideBar from "@/components/SideBar"
 import LoadingScreen from "@/components/LoadingScreen"
 import type { ContentItem } from "@secondbrain/types"
-import { Search, FileText, Image as ImageIcon, Music, Video, Users } from "lucide-react"
+import { Search, FileText, Image as ImageIcon, Music, Video, File, Users } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
-const TYPE_ICON:  Record<string, LucideIcon> = { article: FileText, image: ImageIcon, audio: Music, video: Video }
-const TYPE_COLOR: Record<string, string> = { article: "#6366f1", image: "#ec4899", audio: "#f59e0b", video: "#10b981" }
-const TYPE_FILTERS = ["article", "image", "audio", "video"]
+const TYPE_ICON:  Record<string, LucideIcon> = { article: FileText, image: ImageIcon, audio: Music, video: Video, document: File }
+const TYPE_COLOR: Record<string, string> = { article: "#6366f1", image: "#ec4899", audio: "#f59e0b", video: "#10b981", document: "#e1434b" }
+const TYPE_FILTERS = ["article", "image", "audio", "video", "document"]
 
 export default function SharedPage() {
   const router  = useRouter()
@@ -45,7 +45,7 @@ export default function SharedPage() {
 
   return (
     <div className="h-dvh w-dvw flex overflow-hidden transition-colors duration-300" style={{ background: "var(--bg-primary)" }}>
-      <div className="hidden md:block md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
+      <div className="w-0 md:w-[220px] flex-shrink-0 h-full"><SideBar /></div>
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b" style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}>
