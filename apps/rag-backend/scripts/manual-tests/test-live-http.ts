@@ -4,8 +4,8 @@ dotenv.config()
 import express, { Request, Response } from "express"
 import cors from "cors"
 import type { RagAskRequest, RagAskResponse, RagIndexRequest } from "@secondbrain/types"
-import { askWithRag, indexContent } from "./services/indexer"
-import { addJob, getJob, startWorker } from "./worker/queue"
+import { askWithRag, indexContent } from "../../src/services/indexer"
+import { addJob, getJob, startWorker } from "../../src/worker/queue"
 import { randomUUID } from "node:crypto"
 
 // Initialize Express Server

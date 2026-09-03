@@ -12,11 +12,12 @@ import { downloadUrl } from "./lib/download"
 import { searchSimilar, searchSimilarImages } from "./lib/qdrant"
 import { generateGroqAnswer } from "./lib/groq"
 import { buildGroundedSystemPrompt, citedSourceIndices, labelForSource, stripCitationMarkers, validateUserQuery } from "./lib/guardrails"
+import { config } from "./lib/config"
 
 dotenv.config()
 
 const app = express()
-const port = process.env.RAG_BACKEND_PORT ? Number(process.env.RAG_BACKEND_PORT) : 3000
+const port = config.port
 
 app.use(cors())
 app.use(express.json({ limit: "25mb" }))

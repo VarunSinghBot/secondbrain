@@ -1,7 +1,7 @@
 import dotenv from "dotenv"
 dotenv.config()
 
-import { indexContent, askWithRag } from "./services/indexer"
+import { indexContent, askWithRag } from "../../src/services/indexer"
 import { randomUUID } from "node:crypto"
 
 interface TestStepResult {

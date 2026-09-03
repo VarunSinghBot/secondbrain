@@ -8,11 +8,11 @@ import dotenv from "dotenv"
 dotenv.config()
 
 import { randomUUID } from "node:crypto"
-import { embedText } from "./lib/embeddings"
-import { upsertChunk, searchSimilar, deleteContentVectors, ensureCollections } from "./lib/qdrant"
-import { generateGroqAnswer } from "./lib/groq"
-import { buildGroundedSystemPrompt, validateContextRelevance, validateUserQuery, type RAGSourceContext } from "./lib/guardrails"
-import { indexContent, askWithRag } from "./services/indexer"
+import { embedText } from "../../src/lib/embeddings"
+import { upsertChunk, searchSimilar, deleteContentVectors, ensureCollections } from "../../src/lib/qdrant"
+import { generateGroqAnswer } from "../../src/lib/groq"
+import { buildGroundedSystemPrompt, validateContextRelevance, validateUserQuery, type RAGSourceContext } from "../../src/lib/guardrails"
+import { indexContent, askWithRag } from "../../src/services/indexer"
 
 const testUserId = `smoke-test-${randomUUID().slice(0, 8)}`
 const testContentId = `smoke-content-${randomUUID().slice(0, 8)}`
