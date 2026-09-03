@@ -222,13 +222,15 @@ export async function searchSimilar(vector: number[], userId: string, limit = 5)
   const data = (await response.json()) as { result?: SearchHit[] }
   const hits = data.result ?? []
 
-  console.log(`[qdrant:searchSimilar] userId=${userId} rawHits=${hits.length}`, 
-    hits.map(h => ({ 
-      modality: h.payload?.modality, 
-      score: h.score, 
-      preview: String(h.payload?.text ?? "").slice(0, 60) 
-    }))
-  );
+  if (config.debugRetrievalLogging) {
+    console.log(`[qdrant:searchSimilar] userId=${userId} rawHits=${hits.length}`,
+      hits.map(h => ({
+        modality: h.payload?.modality,
+        score: h.score,
+        preview: String(h.payload?.text ?? "").slice(0, 60)
+      }))
+    )
+  }
 
   return hits
 }
@@ -255,13 +257,15 @@ export async function searchSimilarImages(vector: number[], userId: string, limi
   const data = (await response.json()) as { result?: SearchHit[] }
   const hits = data.result ?? []
 
-  console.log(`[qdrant:searchSimilarImages] userId=${userId} rawHits=${hits.length}`, 
-    hits.map(h => ({ 
-      modality: h.payload?.modality, 
-      score: h.score, 
-      preview: String(h.payload?.text ?? h.payload?.caption ?? "").slice(0, 60) 
-    }))
-  );
+  if (config.debugRetrievalLogging) {
+    console.log(`[qdrant:searchSimilarImages] userId=${userId} rawHits=${hits.length}`,
+      hits.map(h => ({
+        modality: h.payload?.modality,
+        score: h.score,
+        preview: String(h.payload?.text ?? h.payload?.caption ?? "").slice(0, 60)
+      }))
+    )
+  }
 
   return hits
 }

@@ -33,6 +33,11 @@ export const config = {
   qdrantCollection: cleanEnv(getEnv("QDRANT_COLLECTION"), "rag_text"),
   qdrantImageCollection: cleanEnv(getEnv("QDRANT_IMAGE_COLLECTION"), "rag_images"),
   clipSidecarUrl: cleanEnv(getEnv("CLIP_SIDECAR_URL"), "http://localhost:8001"),
+  // Off by default: searchSimilar/searchSimilarImages (qdrant.ts) log every
+  // retrieved hit's modality/score/text-preview on every request when this
+  // is true — real user note content, so it must stay opt-in, not print
+  // unconditionally in production.
+  debugRetrievalLogging: (getEnv("DEBUG_RETRIEVAL_LOGGING") ?? "false").trim().toLowerCase() === "true",
   // Fixed, not env-overridable: Qdrant vectors and Gemini's outputDimensionality
   // are tied to this exact model, so swapping it requires a deliberate migration.
   embeddingModel: "gemini-embedding-001" as const,

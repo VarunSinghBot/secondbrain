@@ -11,6 +11,9 @@ services:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
 
+  # Port is fixed via the Dockerfile's own `uvicorn ... --port 8001` CMD —
+  # main.py never reads a PORT env var, so none is declared here to avoid
+  # implying it's configurable this way.
   clip-sidecar:
     build:
       context: ./clip-sidecar
@@ -18,30 +21,13 @@ services:
     container_name: secondbrain-clip-sidecar
     ports:
       - "8001:8001"
-    environment:
-      - PORT=8001
     restart: unless-stopped
 
-  rag-backend:
-    build:
-      context: .
-      dockerfile: apps/rag-backend/Dockerfile
-    container_name: secondbrain-rag-backend
-    ports:
-      - "3000:3000"
-    environment:
-      - RAG_BACKEND_PORT=3000
-      - QDRANT_URL=http://qdrant:6333
-      - CLIP_SIDECAR_URL=http://clip-sidecar:8001
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - QDRANT_API_KEY=${QDRANT_API_KEY}
-      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
-      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
-      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
-    depends_on:
-      - qdrant
-      - clip-sidecar
-    restart: unless-stopped
+  # apps/rag-backend, apps/web, and apps/chat-backend have no Dockerfiles and
+  # aren't run via this compose file — they run directly (`pnpm dev`/`pnpm
+  # build`, see the root README's Setup & run) against the services below.
+  # This file only provisions the two dependencies that benefit from being
+  # containerized locally: the vector database and the CLIP sidecar.
 
 volumes:
   qdrant_storage:

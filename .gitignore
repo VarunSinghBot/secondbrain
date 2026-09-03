@@ -1,14 +1,27 @@
 node_modules/
 .next/
 dist/
+build/
 .turbo/
-*.env
-.env.local
-.DS_Store
+coverage/
 
-# Generated Prisma client output for rag-backend (~10k lines, regenerate
-# with `pnpm db:generate`) — not shared via git.
+# Env files — every variant except the committed .env.example templates.
+# Note: RAG_JOBS_FILE-style env overrides that point somewhere else aren't
+# (and can't be) covered here — gitignore can't follow a path set at runtime,
+# only the default locations documented elsewhere in this file.
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
+.idea/
+*.log
+
+# Generated Prisma client output for rag-backend and web (regenerate with
+# `pnpm db:generate`) — not shared via git.
 apps/rag-backend/src/generated/
+apps/web/src/generated/
 
 # Python virtualenv for clip-sidecar (created locally, not shared via git)
 clip-sidecar/.venv/
