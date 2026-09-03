@@ -1,12 +1,12 @@
 import dotenv from "dotenv"
 dotenv.config()
 
-import { indexContent, askWithRag, reindexUserContent } from "./services/indexer"
-import { deleteContentVectors, deleteUserVectors, searchSimilar } from "./lib/qdrant"
-import { embedText } from "./lib/embeddings"
-import { prisma } from "./lib/prisma"
-import { validateUserQuery, validateContextRelevance, enforceGroundingGuardrail } from "./lib/guardrails"
-import { chunkText, normalizeText } from "./lib/text"
+import { indexContent, askWithRag, reindexUserContent } from "../../src/services/indexer"
+import { deleteContentVectors, deleteUserVectors, searchSimilar } from "../../src/lib/qdrant"
+import { embedText } from "../../src/lib/embeddings"
+import { prisma } from "../../src/lib/prisma"
+import { validateUserQuery, validateContextRelevance } from "../../src/lib/guardrails"
+import { chunkText, normalizeText } from "../../src/lib/text"
 import { randomUUID } from "node:crypto"
 
 // ═══════════════════════════════════════════════════════════════
@@ -103,8 +103,15 @@ function testInputGuardrails() {
 // ───────────────────────────────────────────────────────────────
 // CATEGORY 3: CONTEXT RELEVANCE GUARDRAILS (Unit Tests)
 // ───────────────────────────────────────────────────────────────
+// Grounding itself (the "insufficient context" fallback and the empty-answer
+// fallback) is no longer a separately callable guardrail function — both are
+// inline checks in askWithRag() (services/indexer.ts, the minOverallScore
+// gate and the answer.trim() === "" check right after generateGroqAnswer()).
+// The live, reachable version of that check already runs in CATEGORY 13
+// ("No-context query returns grounded fallback") via a real askWithRag()
+// call, so it isn't duplicated here.
 function testContextGuardrails() {
-  console.log("\n🎯 CATEGORY 3: Context Relevance & Grounding Guardrails")
+  console.log("\n🎯 CATEGORY 3: Context Relevance Guardrails")
 
   // 3a. High-score sources pass
   const highSources = [
@@ -120,18 +127,6 @@ function testContextGuardrails() {
   ]
   const lowResult = validateContextRelevance(lowSources, 0.2)
   record("Context Guardrails", "Low-score sources filtered out", !lowResult.hasSufficientContext, `Filtered: ${lowResult.filteredSources.length}, maxScore: ${lowResult.maxScore}`)
-
-  // 3c. Grounding guardrail — sufficient context
-  const grounded = enforceGroundingGuardrail("The answer is 42", true)
-  record("Grounding", "Answer with sufficient context passes through", grounded.grounded && grounded.finalAnswer === "The answer is 42", `grounded: ${grounded.grounded}`)
-
-  // 3d. Grounding guardrail — insufficient context
-  const ungrounded = enforceGroundingGuardrail("The answer is 42", false)
-  record("Grounding", "Answer without context returns fallback message", ungrounded.finalAnswer.includes("could not find sufficient context"), `answer: "${ungrounded.finalAnswer.slice(0, 60)}..."`)
-
-  // 3e. Grounding guardrail — empty answer
-  const emptyAnswer = enforceGroundingGuardrail("", true)
-  record("Grounding", "Empty LLM answer returns fallback", !emptyAnswer.grounded, `answer: "${emptyAnswer.finalAnswer.slice(0, 50)}..."`)
 }
 
 // ───────────────────────────────────────────────────────────────

@@ -6,7 +6,6 @@ import {
   citedSourceIndices,
   stripCitationMarkers,
   labelForSource,
-  enforceGroundingGuardrail,
   type RAGSourceContext,
 } from "../lib/guardrails"
 import { joinNaturally, stripHtml, normalizeText, chunkText } from "../lib/text"
@@ -311,39 +310,6 @@ describe("labelForSource", () => {
   it("formats a timestamp over a minute correctly (mm:ss with zero-padding)", () => {
     const label = labelForSource(makeSource({ modality: "video_frame", timestampSeconds: 125 }))
     expect(label).toBe("Video frame source (at 2:05)")
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────────────
-// enforceGroundingGuardrail — TC18 (explicit "insufficient context" message)
-// ─────────────────────────────────────────────────────────────────────────
-describe("enforceGroundingGuardrail", () => {
-  it("returns the standard fallback message when context is insufficient", () => {
-    const result = enforceGroundingGuardrail("Some generated answer", false)
-    expect(result.finalAnswer).toMatch(/could not find sufficient context/i)
-    expect(result.grounded).toBe(true)
-  })
-
-  it("returns the model's answer unchanged when context is sufficient and non-empty", () => {
-    const result = enforceGroundingGuardrail("The deadline is Friday, according to your notes [1].", true)
-    expect(result.finalAnswer).toBe("The deadline is Friday, according to your notes [1].")
-    expect(result.grounded).toBe(true)
-  })
-
-  it("trims whitespace from the model's answer", () => {
-    const result = enforceGroundingGuardrail("   padded answer   ", true)
-    expect(result.finalAnswer).toBe("padded answer")
-  })
-
-  it("flags an ungrounded result when the model returns an empty answer despite sufficient context", () => {
-    const result = enforceGroundingGuardrail("", true)
-    expect(result.grounded).toBe(false)
-    expect(result.finalAnswer).toMatch(/could not generate an answer/i)
-  })
-
-  it("flags an ungrounded result when the model returns only whitespace", () => {
-    const result = enforceGroundingGuardrail("     ", true)
-    expect(result.grounded).toBe(false)
   })
 })
 

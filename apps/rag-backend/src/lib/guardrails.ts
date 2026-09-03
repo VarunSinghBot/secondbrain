@@ -178,28 +178,3 @@ export function labelForSource(source: RAGSourceContext): string {
   if (modality === "video_audio") return "Video transcript source"
   return "Note source"
 }
-
-export function enforceGroundingGuardrail(
-  answer: string,
-  hasSufficientContext: boolean
-): { finalAnswer: string; grounded: boolean } {
-  if (!hasSufficientContext) {
-    return {
-      finalAnswer: "I could not find sufficient context in your knowledge base to answer this question accurately.",
-      grounded: true,
-    }
-  }
-
-  const normalizedAnswer = answer.trim()
-  if (!normalizedAnswer) {
-    return {
-      finalAnswer: "I could not generate an answer based on the provided context.",
-      grounded: false,
-    }
-  }
-
-  return {
-    finalAnswer: normalizedAnswer,
-    grounded: true,
-  }
-}

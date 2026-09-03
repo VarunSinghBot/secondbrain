@@ -4,13 +4,12 @@ dotenv.config()
 import {
   validateUserQuery,
   validateContextRelevance,
-  enforceGroundingGuardrail,
   RAGSourceContext,
-} from "./lib/guardrails"
-import { config } from "./lib/config"
-import { generateGroqAnswer } from "./lib/groq"
-import { ensureCollections } from "./lib/qdrant"
-import { indexContent, askWithRag } from "./services/indexer"
+} from "../../src/lib/guardrails"
+import { config } from "../../src/lib/config"
+import { generateGroqAnswer } from "../../src/lib/groq"
+import { ensureCollections } from "../../src/lib/qdrant"
+import { indexContent, askWithRag } from "../../src/services/indexer"
 import { randomUUID } from "node:crypto"
 
 interface TestResult {
@@ -105,16 +104,12 @@ async function runTestSuite() {
     "Low-relevance hit (0.20 < 0.35) filtered out; high-relevance hit (0.85) retained"
   )
 
-  // Unit Test 1.6: Grounding Enforcement Fallback
-  start = performance.now()
-  const groundCheck = enforceGroundingGuardrail("Dummy speculative text", false)
-  recordTest(
-    "Unit",
-    "Guardrail 4 - Ungrounded Fallback Response",
-    groundCheck.finalAnswer.includes("could not find sufficient context"),
-    performance.now() - start,
-    "When context is insufficient, default ungrounded fallback message enforced"
-  )
+  // Grounding Enforcement Fallback ("Guardrail 4") is no longer a separately
+  // callable function — it's the minOverallScore gate plus the empty-answer
+  // check inline in askWithRag() (services/indexer.ts). The live, reachable
+  // version of this check already runs below via real askWithRag() calls —
+  // see "Anti-Hallucination & Out-of-Domain Safety" (Non-Functional Test 3.2)
+  // and the cross-user isolation check — so it isn't duplicated here.
 
   // ------------------------------------------------------------------
   // CATEGORY 2: FUNCTIONAL INTEGRATION TESTING (Qdrant, Groq, Cloudinary)

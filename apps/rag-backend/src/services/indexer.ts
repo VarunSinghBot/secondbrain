@@ -461,6 +461,16 @@ export async function askWithRag(
   const systemPrompt = buildGroundedSystemPrompt(cappedHits)
   const answer = await generateGroqAnswer(systemPrompt, query)
 
+  // Mirrors the minOverallScore gate above: same shape, same message, so
+  // callers see one consistent "no usable answer" signal whether retrieval
+  // found nothing relevant or the LLM came back with nothing usable.
+  if (answer.trim() === "") {
+    return {
+      answer: "I could not find sufficient context in your knowledge base to answer this question accurately.",
+      sources: [],
+    }
+  }
+
   return {
     answer,
     sources: cappedHits,
