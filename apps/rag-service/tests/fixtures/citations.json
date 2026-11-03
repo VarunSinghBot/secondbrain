@@ -1,0 +1,336 @@
+{
+  "citedSourceIndices": [
+    {
+      "input": "",
+      "output": []
+    },
+    {
+      "input": "No citations here.",
+      "output": []
+    },
+    {
+      "input": "See [1] and [2].",
+      "output": [
+        1,
+        2
+      ]
+    },
+    {
+      "input": "Repeat [1][1] and [3].",
+      "output": [
+        1,
+        3
+      ]
+    },
+    {
+      "input": "Full-width 【1】 and 【2】.",
+      "output": [
+        1,
+        2
+      ]
+    },
+    {
+      "input": "Annotated 【1†L1-L2】 and [3†source].",
+      "output": [
+        1,
+        3
+      ]
+    },
+    {
+      "input": "Mixed [1] 【2†L5】 [10]",
+      "output": [
+        1,
+        2,
+        10
+      ]
+    },
+    {
+      "input": "Empty [] and [a] and [ 1 ]",
+      "output": []
+    },
+    {
+      "input": "Multi\nline [4\n] ok",
+      "output": [
+        4
+      ]
+    },
+    {
+      "input": "Open only [1 and 【2",
+      "output": []
+    },
+    {
+      "input": "Arabic-Indic [١] digits",
+      "output": []
+    },
+    {
+      "input": "Zero [0] and [007]",
+      "output": [
+        0,
+        7
+      ]
+    },
+    {
+      "input": "Spaces  here  【1】  and\ttabs\t\t【2†x】 end",
+      "output": [
+        1,
+        2
+      ]
+    },
+    {
+      "input": "Trailing 【3】",
+      "output": [
+        3
+      ]
+    },
+    {
+      "input": "【1】",
+      "output": [
+        1
+      ]
+    },
+    {
+      "input": "a  b   c    d",
+      "output": []
+    },
+    {
+      "input": "Line one  【1】\n  Line two keeps   inner",
+      "output": [
+        1
+      ]
+    },
+    {
+      "input": "Nested [1[2]] oddity",
+      "output": [
+        1
+      ]
+    },
+    {
+      "input": "ASCII keeps [1]  [2]",
+      "output": [
+        1,
+        2
+      ]
+    }
+  ],
+  "stripCitationMarkers": [
+    {
+      "input": "",
+      "output": ""
+    },
+    {
+      "input": "No citations here.",
+      "output": "No citations here."
+    },
+    {
+      "input": "See [1] and [2].",
+      "output": "See [1] and [2]."
+    },
+    {
+      "input": "Repeat [1][1] and [3].",
+      "output": "Repeat [1][1] and [3]."
+    },
+    {
+      "input": "Full-width 【1】 and 【2】.",
+      "output": "Full-width and ."
+    },
+    {
+      "input": "Annotated 【1†L1-L2】 and [3†source].",
+      "output": "Annotated and [3†source]."
+    },
+    {
+      "input": "Mixed [1] 【2†L5】 [10]",
+      "output": "Mixed [1] [10]"
+    },
+    {
+      "input": "Empty [] and [a] and [ 1 ]",
+      "output": "Empty [] and [a] and [ 1 ]"
+    },
+    {
+      "input": "Multi\nline [4\n] ok",
+      "output": "Multi\nline [4\n] ok"
+    },
+    {
+      "input": "Open only [1 and 【2",
+      "output": "Open only [1 and 【2"
+    },
+    {
+      "input": "Arabic-Indic [١] digits",
+      "output": "Arabic-Indic [١] digits"
+    },
+    {
+      "input": "Zero [0] and [007]",
+      "output": "Zero [0] and [007]"
+    },
+    {
+      "input": "Spaces  here  【1】  and\ttabs\t\t【2†x】 end",
+      "output": "Spaces here and\ttabs end"
+    },
+    {
+      "input": "Trailing 【3】",
+      "output": "Trailing"
+    },
+    {
+      "input": "【1】",
+      "output": ""
+    },
+    {
+      "input": "a  b   c    d",
+      "output": "a b c d"
+    },
+    {
+      "input": "Line one  【1】\n  Line two keeps   inner",
+      "output": "Line one \n Line two keeps inner"
+    },
+    {
+      "input": "Nested [1[2]] oddity",
+      "output": "Nested [1[2]] oddity"
+    },
+    {
+      "input": "ASCII keeps [1]  [2]",
+      "output": "ASCII keeps [1] [2]"
+    }
+  ],
+  "labelForSource": [
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5
+      },
+      "output": "Note source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "video",
+        "text": "t",
+        "score": 0.5
+      },
+      "output": "Video source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "VIDEO_FRAME"
+      },
+      "output": "Video frame source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "video_frame",
+        "timestampSeconds": 0
+      },
+      "output": "Video frame source (at 0:00)"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "video_frame",
+        "timestampSeconds": 42
+      },
+      "output": "Video frame source (at 0:42)"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "video_frame",
+        "timestampSeconds": 61.9
+      },
+      "output": "Video frame source (at 1:01)"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "video_frame",
+        "timestampSeconds": 3725
+      },
+      "output": "Video frame source (at 62:05)"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "video_frame",
+        "timestampSeconds": null
+      },
+      "output": "Video frame source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "image"
+      },
+      "output": "Image source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "Audio",
+        "text": "t",
+        "score": 0.5
+      },
+      "output": "Audio source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "video_audio"
+      },
+      "output": "Video transcript source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "x",
+        "text": "t",
+        "score": 0.5,
+        "modality": "article"
+      },
+      "output": "Note source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "NOTE",
+        "text": "t",
+        "score": 0.5
+      },
+      "output": "Note source"
+    },
+    {
+      "source": {
+        "contentId": "c",
+        "sourceType": "image",
+        "text": "t",
+        "score": 0.5,
+        "modality": ""
+      },
+      "output": "Image source"
+    }
+  ]
+}

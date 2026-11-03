@@ -1,0 +1,25 @@
+name: rag-service
+
+on:
+  push:
+    paths: ["apps/rag-service/**", ".github/workflows/rag-service.yml"]
+  pull_request:
+    paths: ["apps/rag-service/**", ".github/workflows/rag-service.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/rag-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/rag-service/uv.lock
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest -m "not integration"
