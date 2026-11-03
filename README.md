@@ -15,6 +15,7 @@ Multimodal notes with retrieval-augmented question answering over your own conte
 - [Tech stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Setup & run](#setup--run)
+- [Python RAG service](#python-rag-service)
 
 SecondBrain is a multimodal, multi-tenant note-taking app. Capture notes as
 text, images, audio, video, or PDFs, tag and share them, and ask
@@ -58,6 +59,10 @@ apps/rag-backend     Express/TypeScript — the RAG engine: ingestion, embedding
 apps/chat-backend    A minimal `ws`-based WebSocket server for direct messages.
 packages/types       Shared TypeScript types (ContentType, RAG request/response
                      shapes, etc.) consumed by web and rag-backend.
+apps/rag-service     Python/FastAPI — in-progress 1:1 port of rag-backend that
+                     will replace it and absorb clip-sidecar (CLIP in-process).
+                     Same database and Qdrant collections. Not a pnpm
+                     workspace member; see "Python RAG service" below.
 clip-sidecar/        Python/FastAPI service (not a pnpm workspace member) that
                      runs CLIP (openai/clip-vit-base-patch32) for image
                      embeddings and zero-shot tagging.
@@ -70,6 +75,7 @@ prototypes/          Historical reference notebook, superseded by
 - **apps/web** — Next.js 15, React 19, NextAuth 5, Prisma + PostgreSQL, Redux Toolkit, Tailwind CSS.
 - **apps/rag-backend** — Express 5, TypeScript, Prisma + PostgreSQL, Groq API, Gemini embeddings, Qdrant.
 - **apps/chat-backend** — Node.js WebSocket server (`ws`).
+- **apps/rag-service** — Python 3.11+, FastAPI, httpx, qdrant-client, uv, ruff, mypy (strict), pytest.
 - **clip-sidecar** — Python, FastAPI, PyTorch, Hugging Face Transformers (CLIP).
 - **Tooling** — Turborepo, pnpm workspaces, TypeScript.
 
@@ -120,3 +126,28 @@ pnpm build   # turbo build → next build (web), tsc (rag-backend, chat-backend)
 `pnpm lint`/`pnpm type-check` only run against `apps/web`; run rag-backend's
 tests with `pnpm --filter @secondbrain/rag-backend test`. Full environment
 variable reference and configuration detail: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
+## Python RAG service
+
+`apps/rag-service` is a work-in-progress port of `apps/rag-backend` to
+Python/FastAPI. It uses the same Postgres database, the same Qdrant
+collections (`rag_text`, `rag_images`) and the same `RagDocument` table, and
+runs CLIP in-process instead of through `clip-sidecar`. It is not wired into
+the web app yet; `rag-backend` remains the service in use. Run only one of the
+two backends against a database at a time.
+
+Status: scaffold, the pure domain logic (chunking, guardrails, citations) and
+the external-service clients are done. Ingestion, retrieval and the HTTP routes
+are not (only `/health` exists). See `apps/rag-service/HANDOFF.md`.
+
+```bash
+cd apps/rag-service
+uv sync                                   # add --group clip for in-process CLIP
+uv run pytest -m "not integration"        # offline: no API keys or network needed
+uv run ruff check . && uv run mypy
+uv run uvicorn app.main:app --port 8000
+```
+
+Integration tests need a throwaway Qdrant:
+`docker compose -f docker-compose.rag-service.yml up -d`, then
+`uv run pytest -m integration`.
