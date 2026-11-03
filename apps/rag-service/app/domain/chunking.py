@@ -1,3 +1,11 @@
+"""Port of apps/rag-backend/src/lib/text.ts.
+
+Known divergence: JS measures strings in UTF-16 code units, Python in code points. For text
+containing astral characters (emoji and the like) chunk boundaries and token_count therefore
+differ slightly from the TS output. Accepted: it only affects newly ingested content, and
+nothing needs byte-identical output once the TS service is switched off.
+"""
+
 import re
 from dataclasses import dataclass
 

@@ -5,10 +5,19 @@ description = "FastAPI RAG service replacing apps/rag-backend"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.16.2",
+    "qdrant-client>=1.12,<1.16",
     "uvicorn[standard]>=0.32",
 ]
 
 [dependency-groups]
+clip = [
+    "numpy>=2.4.6",
+    "pillow>=13.0.0",
+    "torch>=2.15.0",
+    "transformers>=5.22.1",
+]
 dev = [
     "httpx>=0.27",
     "mypy>=1.13",
@@ -28,8 +37,19 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 strict = true
 files = ["app", "tests"]
 
+[[tool.mypy.overrides]]
+# Optional `clip` group: present locally, absent in CI. Treat as Any either way.
+module = ["torch.*", "transformers.*", "PIL.*", "numpy.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    # search() is deprecated in qdrant-client but query_points needs server >= 1.10; ours is 1.7.4.
+    "ignore:`search` method is deprecated:DeprecationWarning",
+    "ignore:Payload indexes have no effect in the local Qdrant:UserWarning",
+]
 markers = ["integration: needs live services (Postgres, Qdrant, API keys); deselect with -m 'not integration'"]

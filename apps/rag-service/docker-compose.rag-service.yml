@@ -1,0 +1,10 @@
+# Throwaway Qdrant for the integration tests: own port, no volume, so it can never
+# touch the data in the main docker-compose.yml. Same server version as that file,
+# because that is what holds the real rag_text / rag_images.
+#   docker compose -f docker-compose.rag-service.yml up -d
+services:
+  qdrant-test:
+    image: qdrant/qdrant:v1.7.4
+    container_name: rag-service-qdrant-test
+    ports:
+      - "6335:6333"
